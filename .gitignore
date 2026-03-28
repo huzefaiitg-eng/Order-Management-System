@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+credentials.json
+server/studious-loader-*.json
+*.log
+.DS_Store
+.claude/
