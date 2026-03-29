@@ -1,6 +1,6 @@
-export default function KpiCard({ title, value, subtitle, icon: Icon, color = 'indigo' }) {
+export default function KpiCard({ title, value, subtitle, icon: Icon, color = 'terracotta' }) {
   const colorMap = {
-    indigo: 'bg-indigo-50 text-indigo-600',
+    terracotta: 'bg-terracotta-50 text-terracotta-600',
     green: 'bg-green-50 text-green-600',
     blue: 'bg-blue-50 text-blue-600',
     amber: 'bg-amber-50 text-amber-600',

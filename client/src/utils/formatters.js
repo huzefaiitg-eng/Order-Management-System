@@ -28,7 +28,7 @@ export const PAYMENT_MODES = ['COD', 'UPI', 'Bank Transfer', 'Credit/Debit Card'
 export const STATUS_COLORS = {
   Pending: 'bg-yellow-100 text-yellow-800',
   Confirmed: 'bg-blue-100 text-blue-800',
-  Packed: 'bg-indigo-100 text-indigo-800',
+  Packed: 'bg-terracotta-100 text-terracotta-800',
   Shipped: 'bg-purple-100 text-purple-800',
   'Out for Delivery': 'bg-cyan-100 text-cyan-800',
   Delivered: 'bg-green-100 text-green-800',
@@ -37,7 +37,7 @@ export const STATUS_COLORS = {
   Refunded: 'bg-orange-100 text-orange-800',
 };
 
-export const CHART_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4'];
+export const CHART_COLORS = ['#C8956C', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4'];
 
 export const PRODUCT_CATEGORIES = ['Men', 'Women', 'Kids'];
 

@@ -18,7 +18,7 @@ function InsightSection({ icon: Icon, title, count, color, children }) {
     orange: 'bg-orange-50 text-orange-600 border-orange-200',
     green: 'bg-green-50 text-green-600 border-green-200',
     purple: 'bg-purple-50 text-purple-600 border-purple-200',
-    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-200',
+    terracotta: 'bg-terracotta-50 text-terracotta-600 border-terracotta-200',
   };
 
   return (
@@ -63,7 +63,7 @@ export default function Insights() {
             onClick={() => setActiveTab(tab.key)}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === tab.key
-                ? 'bg-white text-indigo-700 shadow-sm'
+                ? 'bg-white text-terracotta-700 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >

@@ -64,7 +64,7 @@ export default function OrderDetail() {
             <div>
               <h1 className="text-xl font-bold text-gray-900">
                 {order.articleId ? (
-                  <Link to={`/inventory/${encodeURIComponent(order.articleId)}`} className="hover:text-indigo-600">
+                  <Link to={`/inventory/${encodeURIComponent(order.articleId)}`} className="hover:text-terracotta-600">
                     {order.productOrdered}
                   </Link>
                 ) : order.productOrdered}
@@ -78,7 +78,7 @@ export default function OrderDetail() {
               {(order.category || order.subCategory) && (
                 <div className="flex gap-2 mt-2">
                   {order.category && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-terracotta-100 text-terracotta-800">
                       {order.category}
                     </span>
                   )}
@@ -104,13 +104,13 @@ export default function OrderDetail() {
                   <div key={status} className="flex items-center flex-1">
                     <div className="flex flex-col items-center flex-1">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                        isCurrent ? 'bg-indigo-600 text-white' :
+                        isCurrent ? 'bg-terracotta-600 text-white' :
                         isActive ? 'bg-green-500 text-white' :
                         'bg-gray-200 text-gray-500'
                       }`}>
                         {isActive && !isCurrent ? '✓' : i + 1}
                       </div>
-                      <span className={`text-[10px] mt-1 text-center ${isCurrent ? 'font-bold text-indigo-600' : 'text-gray-400'}`}>
+                      <span className={`text-[10px] mt-1 text-center ${isCurrent ? 'font-bold text-terracotta-600' : 'text-gray-400'}`}>
                         {status}
                       </span>
                     </div>

@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, ShoppingBag, Lightbulb, Users, Package } from 'lucide-react';
+import logo from '../assets/logo.png';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -13,10 +14,10 @@ export default function Navbar() {
   const { pathname } = useLocation();
 
   return (
-    <nav className="bg-white border-b border-gray-200 px-6 py-3 sticky top-0 z-50">
+    <nav className="bg-brand-black border-b border-gray-800 px-6 py-3 sticky top-0 z-50">
       <div className="flex items-center justify-between max-w-7xl mx-auto">
-        <Link to="/" className="text-xl font-bold text-gray-900 tracking-tight">
-          ShoeOMS
+        <Link to="/">
+          <img src={logo} alt="Bombay Stride" className="h-8" />
         </Link>
         <div className="flex gap-1">
           {navItems.map(({ path, label, icon: Icon }) => (
@@ -25,8 +26,8 @@ export default function Navbar() {
               to={path}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 pathname === path
-                  ? 'bg-indigo-50 text-indigo-700'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-terracotta-500/15 text-terracotta-500'
+                  : 'text-gray-300 hover:bg-white/10 hover:text-white'
               }`}
             >
               <Icon size={18} />

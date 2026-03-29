@@ -56,7 +56,7 @@ export default function Orders() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
-        <button onClick={refresh} className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors">
+        <button onClick={refresh} className="flex items-center gap-2 px-3 py-2 text-sm bg-terracotta-50 text-terracotta-700 rounded-lg hover:bg-terracotta-100 transition-colors">
           <RefreshCw size={16} />
           Refresh
         </button>
@@ -71,7 +71,7 @@ export default function Orders() {
             placeholder="Search name, phone, product..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
+            className="pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-64"
           />
         </form>
 
@@ -147,7 +147,7 @@ export default function Orders() {
                     <td className="px-4 py-3">
                       <Link
                         to={`/orders/${order.rowIndex}`}
-                        className="text-indigo-600 hover:text-indigo-800"
+                        className="text-terracotta-600 hover:text-terracotta-800"
                       >
                         <Eye size={16} />
                       </Link>

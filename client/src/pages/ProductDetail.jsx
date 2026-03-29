@@ -1,18 +1,28 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Package, ShoppingBag, IndianRupee, RotateCcw, TrendingUp } from 'lucide-react';
-import { fetchProductByArticleId } from '../services/api';
-import { formatCurrency, formatPercent } from '../utils/formatters';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Package, ShoppingBag, IndianRupee, RotateCcw, TrendingUp, Pencil, X, Check, Archive } from 'lucide-react';
+import { fetchProductByArticleId, updateProduct, archiveProduct } from '../services/api';
+import { formatCurrency, formatPercent, PRODUCT_CATEGORIES } from '../utils/formatters';
 import StockBadge from '../components/StockBadge';
 import StatusBadge from '../components/StatusBadge';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 
+const SUB_CATEGORIES = ['Casual Wear', 'Office Wear', 'Party Wear', 'Sports', 'Ethnic', 'Daily Wear'];
+
 export default function ProductDetail() {
   const { articleId } = useParams();
+  const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Edit mode
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -21,6 +31,58 @@ export default function ProductDetail() {
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, [articleId]);
+
+  const handleArchive = async () => {
+    if (!window.confirm(`Archive "${product.productName}"? It will be moved to the archived list.`)) return;
+    setArchiving(true);
+    try {
+      await archiveProduct(articleId);
+      navigate('/inventory');
+    } catch (err) {
+      alert(err.message);
+      setArchiving(false);
+    }
+  };
+
+  const startEditing = () => {
+    setEditForm({
+      productName: product.productName,
+      category: product.category,
+      subCategory: product.subCategory,
+      productCost: product.productCost,
+      instockQuantity: product.instockQuantity,
+    });
+    setEditing(true);
+    setEditError('');
+  };
+
+  const handleSave = async () => {
+    if (!editForm.productName || !editForm.category || !editForm.subCategory) {
+      setEditError('Product name, category, and sub-category are required');
+      return;
+    }
+    setSaving(true);
+    setEditError('');
+    try {
+      await updateProduct(articleId, {
+        ...editForm,
+        productCost: parseFloat(editForm.productCost),
+        instockQuantity: parseInt(editForm.instockQuantity),
+      });
+      setProduct(prev => ({
+        ...prev,
+        ...editForm,
+        productCost: parseFloat(editForm.productCost),
+        instockQuantity: parseInt(editForm.instockQuantity),
+        availableQuantity: parseInt(editForm.instockQuantity) - prev.quantityInActiveOrders,
+      }));
+      setEditing(false);
+    } catch (err) {
+      setEditError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) return <Loader />;
   if (error) return <ErrorMessage message={error} />;
@@ -36,24 +98,79 @@ export default function ProductDetail() {
       {/* Product Header */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+          <div className="w-14 h-14 rounded-lg bg-terracotta-100 text-terracotta-700 flex items-center justify-center">
             <Package size={24} />
           </div>
           <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-gray-900">{product.productName}</h1>
-              <span className="text-xs font-mono text-gray-400">{product.articleId}</span>
-            </div>
-            <p className="text-sm text-gray-600 mt-1">{product.productDescription}</p>
-            <div className="flex flex-wrap gap-2 mt-3">
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                {product.category}
-              </span>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                {product.subCategory}
-              </span>
-              <StockBadge quantity={product.availableQuantity} />
-            </div>
+            {editing ? (
+              <div className="space-y-3">
+                {editError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{editError}</p>}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Product Name</label>
+                  <input type="text" value={editForm.productName} onChange={e => setEditForm({ ...editForm, productName: e.target.value })}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-full max-w-sm" />
+                </div>
+                <div className="flex gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Category</label>
+                    <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
+                      {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Sub Category</label>
+                    <select value={editForm.subCategory} onChange={e => setEditForm({ ...editForm, subCategory: e.target.value })}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
+                      {SUB_CATEGORIES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Cost Price</label>
+                    <input type="number" min="0" step="0.01" value={editForm.productCost} onChange={e => setEditForm({ ...editForm, productCost: e.target.value })}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-32" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Instock Qty</label>
+                    <input type="number" min="0" value={editForm.instockQuantity} onChange={e => setEditForm({ ...editForm, instockQuantity: e.target.value })}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-32" />
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
+                    <Check size={14} />{saving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                    <X size={14} />Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-xl font-bold text-gray-900">{product.productName}</h1>
+                  <span className="text-xs font-mono text-gray-400">{product.articleId}</span>
+                  <button onClick={startEditing} className="text-gray-400 hover:text-terracotta-600 transition-colors" title="Edit product">
+                    <Pencil size={16} />
+                  </button>
+                  <button onClick={handleArchive} disabled={archiving} className="text-gray-400 hover:text-amber-600 transition-colors disabled:opacity-50" title="Archive product">
+                    <Archive size={16} />
+                  </button>
+                </div>
+                <p className="text-sm text-gray-600 mt-1">{product.productDescription}</p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-terracotta-100 text-terracotta-800">
+                    {product.category}
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    {product.subCategory}
+                  </span>
+                  <StockBadge quantity={product.availableQuantity} />
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -74,7 +191,7 @@ export default function ProductDetail() {
             </div>
           </div>
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <ShoppingBag size={18} className="text-indigo-600" />
+            <ShoppingBag size={18} className="text-terracotta-600" />
             <div>
               <p className="text-xs text-gray-500">Total Orders</p>
               <p className="text-lg font-bold text-gray-900">{product.totalOrders}</p>

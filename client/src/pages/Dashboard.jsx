@@ -24,7 +24,7 @@ export default function Dashboard() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <KpiCard title="Total Orders" value={kpis.totalOrders} icon={ShoppingBag} color="indigo" />
+        <KpiCard title="Total Orders" value={kpis.totalOrders} icon={ShoppingBag} color="terracotta" />
         <KpiCard title="Total Revenue" value={formatCurrency(kpis.totalRevenue)} icon={IndianRupee} color="green" />
         <KpiCard title="Total Profit" value={formatCurrency(kpis.totalProfit)} icon={TrendingUp} color="blue" />
         <KpiCard title="Avg Order Value" value={formatCurrency(kpis.avgOrderValue)} icon={BarChart3} color="amber" />
@@ -61,7 +61,7 @@ export default function Dashboard() {
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip formatter={(value) => formatCurrency(value)} />
               <Legend />
-              <Line type="monotone" dataKey="revenue" stroke="#6366f1" strokeWidth={2} name="Revenue" dot={false} />
+              <Line type="monotone" dataKey="revenue" stroke="#C8956C" strokeWidth={2} name="Revenue" dot={false} />
               <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} name="Profit" dot={false} />
             </LineChart>
           </ResponsiveContainer>

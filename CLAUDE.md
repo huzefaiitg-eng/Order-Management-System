@@ -1,9 +1,17 @@
-# Order Management System (OMS)
+# Bombay Stride — Order Management System (OMS)
 
 ## Overview
 A web application for managing shoe orders coming from multiple sales channels (Amazon, Flipkart, Meesho, Instagram, WhatsApp). The app connects to a Google Sheet as the data source, provides a rich analytics dashboard, and allows order status updates from the UI.
 
+**Brand:** Bombay Stride
 **Business context:** High-quality shoes sold at affordable prices across marketplaces and social media channels.
+
+## Theme
+- **Primary:** Terracotta (#C8956C) — used for buttons, active states, badges, chart accents
+- **Secondary:** Black (#101010) — navbar background
+- **Tertiary:** White (#F6F6F6) — page background
+- Custom Tailwind v4 colors defined via `@theme` in `client/src/index.css`
+- Logo: `client/src/assets/logo.png`
 
 ## Tech Stack
 - **Frontend:** React (Vite), Tailwind CSS
@@ -37,6 +45,8 @@ A web application for managing shoe orders coming from multiple sales channels (
 | Customer Address | Delivery address |
 | Number of Orders | Total order count |
 | Any Active Order | Whether customer has active orders (Yes/No) |
+| Customer Email | Email address |
+| Status | Active or Archived |
 
 ### Tab: `Inventory`
 | Column | Description |
@@ -50,6 +60,7 @@ A web application for managing shoe orders coming from multiple sales channels (
 | Product Cost | Cost price per unit |
 | Instock Quantity | Current stock level |
 | Quantity in Active Orders | Units committed to active orders |
+| Status | Active or Archived |
 
 ### Order Statuses
 `Pending` → `Confirmed` → `Packed` → `Shipped` → `Out for Delivery` → `Delivered`
@@ -102,13 +113,17 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 - Customer order history (other orders from the same customer)
 
 ### 5. Inventory Page
-- Summary cards: Total products, inventory value, low stock count, out of stock count
-- Searchable, filterable table (by category, sub-category)
-- Columns: Article ID, Product Name, Category, Sub Category, Cost, In Stock, Active Orders, Available (color-coded stock badge), Total Sold
+- Summary cards: Total products (active only), inventory value, low stock count, out of stock count
+- Searchable, filterable table (by category, sub-category) — shows Active products only
+- Columns: Article ID, Product Name, Category, Sub Category, Cost, In Stock, Active Orders, Available (color-coded stock badge), Total Sold, Archive button
 - Click "View" to open Product Detail page
+- **Add Product** button — opens modal form to add a new product (auto-generates Article ID)
+- **Archived** button — navigates to Archived Inventory page
 
 ### 6. Product Detail Page
 - Product header with name, description, article ID, category/sub-category badges, stock badge
+- **Edit** button to inline-edit: Product Name, Category, Sub Category, Cost, Instock Qty
+- **Archive** button — marks product as Archived and navigates to inventory list
 - Stats cards: Cost price, in stock, total orders, revenue, return rate
 - Order history table for this product (date, customer, source, price, profit, status)
 
@@ -117,16 +132,32 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 - Searchable, sortable table showing:
   - Customer name (with avatar initials)
   - Phone number
+  - Email address
   - Address
   - Number of orders done (total)
   - Active order count (orders in non-terminal status)
+  - Archive button per row
 - Click "View" to open Customer Detail page
+- **Add Customer** button — opens modal form to add a new customer (auto-generates Customer ID)
+- **Archived** button — navigates to Archived Customers page
 
 ### 8. Customer Detail Page
-- Customer profile header with avatar, name, phone, address
+- Customer profile header with avatar, name, phone, email, address
+- **Edit** button to inline-edit: Name, Phone, Email, Address
+- **Archive** button — marks customer as Archived and navigates to customers list
 - Stats cards: Total orders, active orders, total spent, average order value
 - Active orders table with inline status update (writes back to Google Sheet)
 - Order history table for completed/cancelled/returned orders
+
+### 9. Archived Customers Page (`/customers/archived`)
+- Lists all customers with Status = "Archived" from the Customers sheet
+- Each row has **Unarchive** (restores to active) and **Delete** (permanently removes row from sheet) buttons
+- Delete requires confirmation before removing
+
+### 10. Archived Inventory Page (`/inventory/archived`)
+- Lists all products with Status = "Archived" from the Inventory sheet
+- Each row has **Unarchive** (restores to active) and **Delete** (permanently removes row from sheet) buttons
+- Delete requires confirmation before removing
 
 ## Architecture
 
@@ -165,11 +196,21 @@ server/
 - `PATCH /api/orders/:rowIndex` — Update order status
 - `GET /api/dashboard` — Aggregated stats for dashboard
 - `GET /api/insights` — All insights (order, customer, inventory)
-- `GET /api/customers` — Customer list from master sheet with live order counts (supports `?search=`)
+- `GET /api/customers` — Customer list (supports `?search=`, `?status=Active|Archived`, default Active)
+- `POST /api/customers` — Add a new customer (auto-generates Customer ID)
+- `PATCH /api/customers/:phone/archive` — Archive a customer
+- `PATCH /api/customers/:phone/unarchive` — Unarchive a customer
+- `DELETE /api/customers/:phone` — Permanently delete a customer row from the sheet
 - `GET /api/customers/:phone` — Single customer detail with full order history
-- `GET /api/inventory` — Product list with order stats (supports `?search=`, `?category=`, `?subCategory=`)
-- `GET /api/inventory/summary` — Inventory KPI aggregates
+- `PATCH /api/customers/:phone` — Update customer details (name, phone, address, email)
+- `GET /api/inventory` — Product list (supports `?search=`, `?category=`, `?subCategory=`, `?status=Active|Archived`, default Active)
+- `GET /api/inventory/summary` — Inventory KPI aggregates (active products only)
+- `POST /api/inventory` — Add a new product (auto-generates Article ID)
+- `PATCH /api/inventory/:articleId/archive` — Archive a product
+- `PATCH /api/inventory/:articleId/unarchive` — Unarchive a product
+- `DELETE /api/inventory/:articleId` — Permanently delete a product row from the sheet
 - `GET /api/inventory/:articleId` — Single product detail with order history
+- `PATCH /api/inventory/:articleId` — Update product details (name, category, sub-category, cost, instock qty)
 
 ## Authentication
 - Google Sheets API accessed via **Service Account** (JSON key file stored on backend)
@@ -179,9 +220,17 @@ server/
 ## Environment Variables
 ```
 GOOGLE_SHEET_ID=<spreadsheet-id>
-GOOGLE_CREDENTIALS_PATH=./credentials.json
+GOOGLE_CREDENTIALS_PATH=./credentials.json    # Local dev (file-based)
+GOOGLE_CREDENTIALS=<json-string>              # Production (env var with full JSON)
 PORT=3001
+CLIENT_URL=<frontend-url>                     # CORS origin for production
+VITE_API_URL=<backend-url>                    # Frontend env var for API base URL
 ```
+
+## Deployment
+- **Frontend:** Render Static Site (root: `client`, build: `npm install && npm run build`, publish: `dist`)
+- **Backend:** Render Web Service (root: `server`, build: `npm install`, start: `node index.js`)
+- Credentials loaded from `GOOGLE_CREDENTIALS` env var in production (JSON string)
 
 ## Development Commands
 ```bash

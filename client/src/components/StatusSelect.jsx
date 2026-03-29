@@ -22,7 +22,7 @@ export default function StatusSelect({ currentStatus, onUpdate }) {
       value={currentStatus}
       onChange={handleChange}
       disabled={loading}
-      className="text-xs border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+      className="text-xs border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500 disabled:opacity-50"
     >
       {ORDER_STATUSES.map(s => (
         <option key={s} value={s}>{s}</option>

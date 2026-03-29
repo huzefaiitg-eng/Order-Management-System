@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee } from 'lucide-react';
+import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee, Plus, X, Archive } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
-import { fetchInventorySummary } from '../services/api';
+import { fetchInventorySummary, addProduct, archiveProduct } from '../services/api';
 import { formatCurrency, PRODUCT_CATEGORIES } from '../utils/formatters';
 import StockBadge from '../components/StockBadge';
 import KpiCard from '../components/KpiCard';
@@ -11,6 +11,97 @@ import ErrorMessage from '../components/ErrorMessage';
 
 const SUB_CATEGORIES = ['Casual Wear', 'Office Wear', 'Party Wear', 'Sports', 'Ethnic', 'Daily Wear'];
 
+function AddProductModal({ onClose, onAdded }) {
+  const [form, setForm] = useState({
+    productName: '', category: '', subCategory: '', productCost: '', instockQuantity: '', productDescription: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.productName || !form.category || !form.subCategory || !form.productCost || !form.instockQuantity) {
+      setError('Product name, category, sub-category, cost, and instock quantity are required');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await addProduct({
+        ...form,
+        productCost: parseFloat(form.productCost),
+        instockQuantity: parseInt(form.instockQuantity),
+      });
+      onAdded();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-900">Add Product</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+        {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg mb-4">{error}</p>}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
+            <input type="text" value={form.productName} onChange={e => setForm({ ...form, productName: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="Product name" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
+                <option value="">Select</option>
+                {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sub Category *</label>
+              <select value={form.subCategory} onChange={e => setForm({ ...form, subCategory: e.target.value })}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
+                <option value="">Select</option>
+                {SUB_CATEGORIES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price *</label>
+              <input type="number" min="0" step="0.01" value={form.productCost} onChange={e => setForm({ ...form, productCost: e.target.value })}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="0" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Instock Qty *</label>
+              <input type="number" min="0" value={form.instockQuantity} onChange={e => setForm({ ...form, instockQuantity: e.target.value })}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="0" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <input type="text" value={form.productDescription} onChange={e => setForm({ ...form, productDescription: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="Product description (optional)" />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+            <button type="submit" disabled={saving} className="flex-1 px-4 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
+              {saving ? 'Adding...' : 'Add Product'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function Inventory() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
@@ -18,6 +109,8 @@ export default function Inventory() {
   const [filters, setFilters] = useState({});
   const { products, loading, error, refresh } = useInventory(filters);
   const [summary, setSummary] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [archiving, setArchiving] = useState(null);
 
   const [sortField, setSortField] = useState('productName');
   const [sortDir, setSortDir] = useState('asc');
@@ -25,6 +118,11 @@ export default function Inventory() {
   useEffect(() => {
     fetchInventorySummary().then(setSummary).catch(() => {});
   }, []);
+
+  const handleRefresh = () => {
+    refresh();
+    fetchInventorySummary().then(setSummary);
+  };
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -47,6 +145,20 @@ export default function Inventory() {
     }
   };
 
+  const handleArchive = async (product) => {
+    if (!window.confirm(`Archive "${product.productName}"? It will be moved to the archived list.`)) return;
+    setArchiving(product.articleId);
+    try {
+      await archiveProduct(product.articleId);
+      refresh();
+      fetchInventorySummary().then(setSummary);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setArchiving(null);
+    }
+  };
+
   let sorted = [...products];
   if (sortField) {
     sorted.sort((a, b) => {
@@ -64,16 +176,26 @@ export default function Inventory() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Inventory</h1>
-        <button onClick={() => { refresh(); fetchInventorySummary().then(setSummary); }} className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors">
-          <RefreshCw size={16} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <Link to="/inventory/archived" className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
+            <Archive size={16} />
+            Archived
+          </Link>
+          <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-3 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 transition-colors">
+            <Plus size={16} />
+            Add Product
+          </button>
+          <button onClick={handleRefresh} className="flex items-center gap-2 px-3 py-2 text-sm bg-terracotta-50 text-terracotta-700 rounded-lg hover:bg-terracotta-100 transition-colors">
+            <RefreshCw size={16} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
       {summary && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <KpiCard title="Total Products" value={summary.totalProducts} icon={Package} color="indigo" />
+          <KpiCard title="Total Products" value={summary.totalProducts} icon={Package} color="terracotta" />
           <KpiCard title="Inventory Value" value={formatCurrency(summary.totalInventoryValue)} icon={IndianRupee} color="green" />
           <KpiCard title="Low Stock" value={summary.lowStockCount} icon={AlertTriangle} color="amber" />
           <KpiCard title="Out of Stock" value={summary.outOfStockCount} icon={PackageX} color="red" />
@@ -89,13 +211,13 @@ export default function Inventory() {
             placeholder="Search products..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500"
           />
         </form>
         <select
           value={category}
           onChange={e => handleFilterChange('category', e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500"
         >
           <option value="">All Categories</option>
           {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -103,7 +225,7 @@ export default function Inventory() {
         <select
           value={subCategory}
           onChange={e => handleFilterChange('subCategory', e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500"
         >
           <option value="">All Sub-Categories</option>
           {SUB_CATEGORIES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -153,7 +275,7 @@ export default function Inventory() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs font-medium">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded bg-terracotta-50 text-terracotta-700 text-xs font-medium">
                         {product.category}
                       </span>
                     </td>
@@ -171,12 +293,22 @@ export default function Inventory() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <Link
-                        to={`/inventory/${encodeURIComponent(product.articleId)}`}
-                        className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-                      >
-                        View
-                      </Link>
+                      <div className="flex items-center gap-3">
+                        <Link
+                          to={`/inventory/${encodeURIComponent(product.articleId)}`}
+                          className="text-sm text-terracotta-600 hover:text-terracotta-800 font-medium"
+                        >
+                          View
+                        </Link>
+                        <button
+                          onClick={() => handleArchive(product)}
+                          disabled={archiving === product.articleId}
+                          className="text-gray-400 hover:text-amber-600 transition-colors disabled:opacity-50"
+                          title="Archive product"
+                        >
+                          <Archive size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -193,6 +325,8 @@ export default function Inventory() {
           </div>
         </div>
       )}
+
+      {showAddModal && <AddProductModal onClose={() => setShowAddModal(false)} onAdded={handleRefresh} />}
     </div>
   );
 }

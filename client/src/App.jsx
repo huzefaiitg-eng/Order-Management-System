@@ -6,8 +6,10 @@ import OrderDetail from './pages/OrderDetail';
 import Insights from './pages/Insights';
 import Customers from './pages/Customers';
 import CustomerDetail from './pages/CustomerDetail';
+import ArchivedCustomers from './pages/ArchivedCustomers';
 import InventoryPage from './pages/Inventory';
 import ProductDetail from './pages/ProductDetail';
+import ArchivedInventory from './pages/ArchivedInventory';
 
 export default function App() {
   return (
@@ -20,8 +22,10 @@ export default function App() {
             <Route path="/orders" element={<Orders />} />
             <Route path="/orders/:rowIndex" element={<OrderDetail />} />
             <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/inventory/archived" element={<ArchivedInventory />} />
             <Route path="/inventory/:articleId" element={<ProductDetail />} />
             <Route path="/customers" element={<Customers />} />
+            <Route path="/customers/archived" element={<ArchivedCustomers />} />
             <Route path="/customers/:phone" element={<CustomerDetail />} />
             <Route path="/insights" element={<Insights />} />
           </Routes>

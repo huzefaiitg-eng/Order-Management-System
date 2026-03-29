@@ -36,9 +36,12 @@ export function fetchInsights() {
   return request('/insights');
 }
 
-export function fetchCustomers(search = '') {
-  const query = search ? `?search=${encodeURIComponent(search)}` : '';
-  return request(`/customers${query}`);
+export function fetchCustomers(search = '', status = 'Active') {
+  const params = new URLSearchParams();
+  if (search) params.append('search', search);
+  if (status) params.append('status', status);
+  const query = params.toString();
+  return request(`/customers${query ? `?${query}` : ''}`);
 }
 
 export function fetchCustomerByPhone(phone) {
@@ -47,7 +50,8 @@ export function fetchCustomerByPhone(phone) {
 
 export function fetchInventory(filters = {}) {
   const params = new URLSearchParams();
-  Object.entries(filters).forEach(([key, value]) => {
+  const withDefaults = { status: 'Active', ...filters };
+  Object.entries(withDefaults).forEach(([key, value]) => {
     if (value) params.append(key, value);
   });
   const query = params.toString();
@@ -60,4 +64,56 @@ export function fetchInventorySummary() {
 
 export function fetchProductByArticleId(articleId) {
   return request(`/inventory/${encodeURIComponent(articleId)}`);
+}
+
+export function addCustomer(customerData) {
+  return request('/customers', {
+    method: 'POST',
+    body: JSON.stringify(customerData),
+  });
+}
+
+export function updateCustomer(phone, updates) {
+  return request(`/customers/${encodeURIComponent(phone)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+}
+
+export function addProduct(productData) {
+  return request('/inventory', {
+    method: 'POST',
+    body: JSON.stringify(productData),
+  });
+}
+
+export function updateProduct(articleId, updates) {
+  return request(`/inventory/${encodeURIComponent(articleId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+}
+
+export function archiveCustomer(phone) {
+  return request(`/customers/${encodeURIComponent(phone)}/archive`, { method: 'PATCH' });
+}
+
+export function unarchiveCustomer(phone) {
+  return request(`/customers/${encodeURIComponent(phone)}/unarchive`, { method: 'PATCH' });
+}
+
+export function deleteCustomer(phone) {
+  return request(`/customers/${encodeURIComponent(phone)}`, { method: 'DELETE' });
+}
+
+export function archiveProduct(articleId) {
+  return request(`/inventory/${encodeURIComponent(articleId)}/archive`, { method: 'PATCH' });
+}
+
+export function unarchiveProduct(articleId) {
+  return request(`/inventory/${encodeURIComponent(articleId)}/unarchive`, { method: 'PATCH' });
+}
+
+export function deleteProduct(articleId) {
+  return request(`/inventory/${encodeURIComponent(articleId)}`, { method: 'DELETE' });
 }
