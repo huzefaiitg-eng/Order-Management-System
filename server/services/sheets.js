@@ -98,10 +98,10 @@ const CUSTOMER_COLUMN_MAP = {
   customerId: 0,
   customerName: 1,
   customerPhone: 2,
-  customerAddress: 3,
-  numberOfOrders: 4,
-  anyActiveOrder: 5,
-  customerEmail: 6,
+  customerEmail: 3,
+  customerAddress: 4,
+  numberOfOrders: 5,
+  anyActiveOrder: 6,
   status: 7,
 };
 
@@ -156,7 +156,7 @@ async function addCustomer({ customerName, customerPhone, customerAddress, custo
     range: 'Customers!A:H',
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[newId, customerName, customerPhone, customerAddress || '', 0, 'No', customerEmail || '', 'Active']],
+      values: [[newId, customerName, customerPhone, customerEmail || '', customerAddress || '', 0, 'No', 'Active']],
     },
   });
 
@@ -183,8 +183,8 @@ async function updateCustomer(phone, updates) {
   const data = [];
   if (updates.customerName !== undefined) data.push({ range: `Customers!B${rowIdx}`, values: [[updates.customerName]] });
   if (updates.customerPhone !== undefined) data.push({ range: `Customers!C${rowIdx}`, values: [[updates.customerPhone]] });
-  if (updates.customerAddress !== undefined) data.push({ range: `Customers!D${rowIdx}`, values: [[updates.customerAddress]] });
-  if (updates.customerEmail !== undefined) data.push({ range: `Customers!G${rowIdx}`, values: [[updates.customerEmail]] });
+  if (updates.customerEmail !== undefined) data.push({ range: `Customers!D${rowIdx}`, values: [[updates.customerEmail]] });
+  if (updates.customerAddress !== undefined) data.push({ range: `Customers!E${rowIdx}`, values: [[updates.customerAddress]] });
 
   if (data.length > 0) {
     await sheets.spreadsheets.values.batchUpdate({
