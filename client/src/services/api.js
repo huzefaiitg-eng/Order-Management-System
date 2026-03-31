@@ -3,11 +3,21 @@ const BASE_URL = import.meta.env.VITE_API_URL
   : '/api';
 
 async function request(url, options = {}) {
-  const res = await fetch(`${BASE_URL}${url}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  const data = await res.json();
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${url}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+  } catch (err) {
+    throw new Error('Network error: could not reach the server');
+  }
+  let data;
+  try {
+    data = await res.json();
+  } catch (err) {
+    throw new Error(`Server error (${res.status}): invalid response`);
+  }
   if (!data.success) throw new Error(data.error || 'API request failed');
   return data.data;
 }
