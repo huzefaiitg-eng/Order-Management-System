@@ -308,6 +308,84 @@ async function updateProduct(articleId, updates) {
   return { ...product, ...updates };
 }
 
+async function addOrder({ orderFrom, orderDate, customerName, customerPhone, customerAddress, modeOfPayment, productOrdered, productCost, quantityOrdered, pricePaid }) {
+  const sheets = await getClient();
+  const response = await sheets.spreadsheets.values.append({
+    spreadsheetId: env.GOOGLE_SHEET_ID,
+    range: 'Orders!A:K',
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [[orderFrom, orderDate, customerName, customerPhone, customerAddress || '', modeOfPayment, productOrdered, productCost, quantityOrdered || 1, pricePaid, 'Pending']],
+    },
+  });
+
+  // Extract row index from updatedRange (e.g. "Orders!A15:K15" → 15)
+  const updatedRange = response.data.updates.updatedRange;
+  const match = updatedRange.match(/(\d+)/g);
+  const newRowIndex = parseInt(match[match.length - 1]);
+
+  return {
+    rowIndex: newRowIndex,
+    orderFrom,
+    orderDate,
+    customerName,
+    customerPhone,
+    customerAddress: customerAddress || '',
+    modeOfPayment,
+    productOrdered,
+    productCost: parseFloat(productCost) || 0,
+    quantityOrdered: parseInt(quantityOrdered) || 1,
+    pricePaid: parseFloat(pricePaid) || 0,
+    orderStatus: 'Pending',
+    profit: (parseFloat(pricePaid) || 0) - (parseFloat(productCost) || 0),
+  };
+}
+
+async function getOrderStatus(rowIndex) {
+  const sheets = await getClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: env.GOOGLE_SHEET_ID,
+    range: `Orders!K${rowIndex}`,
+  });
+  const values = response.data.values;
+  return values && values[0] ? values[0][0] : '';
+}
+
+// ── Audit ───────────────────────────────────────────────────
+
+async function addAuditEntry({ orderRowIndex, previousStatus, newStatus }) {
+  const changedAt = new Date().toISOString();
+  const sheets = await getClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: env.GOOGLE_SHEET_ID,
+    range: "'Audit History'!A:D",
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [[String(orderRowIndex), previousStatus, newStatus, changedAt]],
+    },
+  });
+  return { orderRowIndex, previousStatus, newStatus, changedAt };
+}
+
+async function getAuditHistory(orderRowIndex) {
+  const sheets = await getClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: env.GOOGLE_SHEET_ID,
+    range: "'Audit History'!A2:D",
+  });
+
+  const rows = response.data.values || [];
+  return rows
+    .filter(row => row[0] === String(orderRowIndex))
+    .map(row => ({
+      orderRowIndex: parseInt(row[0]),
+      previousStatus: row[1] || '',
+      newStatus: row[2] || '',
+      changedAt: row[3] || '',
+    }))
+    .sort((a, b) => new Date(a.changedAt) - new Date(b.changedAt));
+}
+
 async function getSheetNames() {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.get({
@@ -451,10 +529,11 @@ async function deleteProduct(articleId) {
 }
 
 module.exports = {
-  getAllOrders, updateOrderStatus,
+  getAllOrders, updateOrderStatus, addOrder, getOrderStatus,
   getAllCustomers, getCustomerByPhone, addCustomer, updateCustomer,
   archiveCustomer, unarchiveCustomer, deleteCustomer,
   getAllInventory, getProductByArticleId, addProduct, updateProduct,
   archiveProduct, unarchiveProduct, deleteProduct,
+  addAuditEntry, getAuditHistory,
   getSheetNames,
 };

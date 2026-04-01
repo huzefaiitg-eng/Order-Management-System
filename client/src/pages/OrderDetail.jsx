@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Phone, MapPin, Package, CreditCard } from 'lucide-react';
-import { fetchOrders, updateOrderStatus } from '../services/api';
+import { ArrowLeft, Phone, MapPin, Package, CreditCard, Clock } from 'lucide-react';
+import { fetchOrders, updateOrderStatus, fetchOrderAudit } from '../services/api';
 import StatusBadge from '../components/StatusBadge';
 import StatusSelect from '../components/StatusSelect';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
-import { formatCurrency, ORDER_STATUSES } from '../utils/formatters';
+import { formatCurrency, ORDER_STATUSES, STATUS_COLORS } from '../utils/formatters';
 
 const STATUS_FLOW = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered'];
 
@@ -14,34 +14,42 @@ export default function OrderDetail() {
   const { rowIndex } = useParams();
   const [order, setOrder] = useState(null);
   const [customerOrders, setCustomerOrders] = useState([]);
+  const [auditHistory, setAuditHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const allOrders = await fetchOrders();
-        const current = allOrders.find(o => o.rowIndex === parseInt(rowIndex));
-        if (!current) throw new Error('Order not found');
-        setOrder(current);
+  const loadData = async () => {
+    try {
+      const [allOrders, audit] = await Promise.all([
+        fetchOrders(),
+        fetchOrderAudit(parseInt(rowIndex)).catch(() => []),
+      ]);
+      const current = allOrders.find(o => o.rowIndex === parseInt(rowIndex));
+      if (!current) throw new Error('Order not found');
+      setOrder(current);
+      setAuditHistory(audit);
 
-        const related = allOrders.filter(
-          o => o.rowIndex !== current.rowIndex &&
-            (o.customerPhone === current.customerPhone || o.customerName === current.customerName)
-        );
-        setCustomerOrders(related);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+      const related = allOrders.filter(
+        o => o.rowIndex !== current.rowIndex &&
+          (o.customerPhone === current.customerPhone || o.customerName === current.customerName)
+      );
+      setCustomerOrders(related);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-    load();
+  };
+
+  useEffect(() => {
+    loadData();
   }, [rowIndex]);
 
   const handleStatusUpdate = async (newStatus) => {
     await updateOrderStatus(order.rowIndex, newStatus);
     setOrder(prev => ({ ...prev, orderStatus: newStatus }));
+    // Refresh audit history after status change
+    fetchOrderAudit(parseInt(rowIndex)).then(setAuditHistory).catch(() => {});
   };
 
   if (loading) return <Loader />;
@@ -158,6 +166,45 @@ export default function OrderDetail() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Audit History */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Clock size={18} className="text-gray-400" />
+            <h2 className="text-sm font-semibold text-gray-700">Status History</h2>
+          </div>
+          {auditHistory.length === 0 ? (
+            <p className="text-sm text-gray-400">No status history available</p>
+          ) : (
+            <div className="space-y-0">
+              {[...auditHistory].reverse().map((entry, i) => {
+                const dotColor = STATUS_COLORS[entry.newStatus]?.replace('text-', 'bg-').split(' ')[0] || 'bg-gray-300';
+                return (
+                  <div key={i} className="flex gap-3 relative">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-3 h-3 rounded-full mt-1.5 ${dotColor}`} />
+                      {i < auditHistory.length - 1 && <div className="w-0.5 flex-1 bg-gray-200 my-1" />}
+                    </div>
+                    <div className="pb-4">
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={entry.newStatus} />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {entry.previousStatus ? `Changed from ${entry.previousStatus}` : 'Order created'}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {new Date(entry.changedAt).toLocaleString('en-IN', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                          hour: 'numeric', minute: '2-digit', hour12: true,
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Customer Info */}

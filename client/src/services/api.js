@@ -127,3 +127,14 @@ export function unarchiveProduct(articleId) {
 export function deleteProduct(articleId) {
   return request(`/inventory/${encodeURIComponent(articleId)}`, { method: 'DELETE' });
 }
+
+export function addOrder(orderData) {
+  return request('/orders', {
+    method: 'POST',
+    body: JSON.stringify(orderData),
+  });
+}
+
+export function fetchOrderAudit(rowIndex) {
+  return request(`/orders/${rowIndex}/audit`);
+}

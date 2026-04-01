@@ -21,7 +21,7 @@ export const ORDER_STATUSES = [
   'Out for Delivery', 'Delivered', 'Returned', 'Cancelled', 'Refunded',
 ];
 
-export const ORDER_SOURCES = ['Amazon', 'Flipkart', 'Meesho', 'Instagram', 'WhatsApp'];
+export const ORDER_SOURCES = ['Amazon', 'Flipkart', 'Meesho', 'Instagram', 'WhatsApp', 'Manual'];
 
 export const PAYMENT_MODES = ['COD', 'UPI', 'Bank Transfer', 'Credit/Debit Card', 'Wallet', 'EMI'];
 

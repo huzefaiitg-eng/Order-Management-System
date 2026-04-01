@@ -62,6 +62,14 @@ A web application for managing shoe orders coming from multiple sales channels (
 | Quantity in Active Orders | Units committed to active orders |
 | Status | Active or Archived |
 
+### Tab: `Audit`
+| Column | Description |
+|---|---|
+| Order Row Index | Row number of the order in Orders sheet |
+| Previous Status | Status before the change (empty for initial creation) |
+| New Status | Status after the change |
+| Changed At | ISO 8601 timestamp of the change |
+
 ### Order Statuses
 `Pending` → `Confirmed` → `Packed` → `Shipped` → `Out for Delivery` → `Delivered`
 Branch statuses: `Returned`, `Cancelled`, `Refunded`
@@ -84,6 +92,10 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 - Inline status update (dropdown to change order status — writes back to Google Sheet)
 - Profit column (Price Paid - Product Cost) with color coding (green for profit, red for loss)
 - Orders enriched with customer data from Customers master and product data from Inventory master
+- **Add Order** button — opens modal form to manually create an order:
+  - Date (default today DD/MM/YYYY), Source (dropdown including "Manual"), Customer (searchable from active customers or add new inline), Product (searchable from active inventory or add new inline), Payment mode, Quantity, Price
+  - Default status: Pending
+  - Logs initial audit entry on creation
 
 ### 3. Insights & Actions Panel (Tabbed)
 **Order Insights:**
@@ -110,6 +122,7 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 - Product info enriched from Inventory (description, category, sub-category badges)
 - Product name links to Inventory detail page
 - Status timeline/history
+- **Audit History** section — shows chronological timeline of all status changes with timestamps, previous/new status, and "Order created" marker for initial entry
 - Customer order history (other orders from the same customer)
 
 ### 5. Inventory Page
@@ -193,7 +206,9 @@ server/
 
 ### API Endpoints
 - `GET /api/orders` — Fetch all orders enriched with customer + inventory data (supports filters)
-- `PATCH /api/orders/:rowIndex` — Update order status
+- `POST /api/orders` — Add a new order (auto-sets status to Pending, logs audit entry)
+- `GET /api/orders/:rowIndex/audit` — Fetch audit history (status changes) for an order
+- `PATCH /api/orders/:rowIndex` — Update order status (logs audit entry with previous/new status)
 - `GET /api/dashboard` — Aggregated stats for dashboard
 - `GET /api/insights` — All insights (order, customer, inventory)
 - `GET /api/customers` — Customer list (supports `?search=`, `?status=Active|Archived`, default Active)

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getAllOrders, updateOrderStatus, getAllCustomers, getAllInventory } = require('../services/sheets');
+const { getAllOrders, updateOrderStatus, addOrder, getOrderStatus, addAuditEntry, getAuditHistory, getAllCustomers, getAllInventory } = require('../services/sheets');
 
 const VALID_STATUSES = [
   'Pending', 'Confirmed', 'Packed', 'Shipped',
@@ -75,6 +75,47 @@ router.get('/', async (req, res) => {
   }
 });
 
+// POST /api/orders
+router.post('/', async (req, res) => {
+  try {
+    const { orderFrom, customerName, customerPhone, customerAddress, productOrdered, productCost, pricePaid, modeOfPayment, quantityOrdered } = req.body;
+
+    if (!orderFrom || !customerName || !customerPhone || !productOrdered || !modeOfPayment) {
+      return res.status(400).json({ success: false, error: 'Missing required fields: orderFrom, customerName, customerPhone, productOrdered, modeOfPayment' });
+    }
+
+    const orderDate = req.body.orderDate || new Date().toLocaleDateString('en-GB');
+
+    const result = await addOrder({
+      orderFrom, orderDate, customerName, customerPhone,
+      customerAddress: customerAddress || '',
+      modeOfPayment, productOrdered,
+      productCost: productCost || 0,
+      quantityOrdered: quantityOrdered || 1,
+      pricePaid: pricePaid || 0,
+    });
+
+    // Log initial audit entry
+    await addAuditEntry({ orderRowIndex: result.rowIndex, previousStatus: '', newStatus: 'Pending' });
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error adding order:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/orders/:rowIndex/audit
+router.get('/:rowIndex/audit', async (req, res) => {
+  try {
+    const entries = await getAuditHistory(parseInt(req.params.rowIndex));
+    res.json({ success: true, data: entries });
+  } catch (error) {
+    console.error('Error fetching audit history:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // PATCH /api/orders/:rowIndex
 router.patch('/:rowIndex', async (req, res) => {
   try {
@@ -88,7 +129,14 @@ router.patch('/:rowIndex', async (req, res) => {
       });
     }
 
+    // Get current status before updating for audit trail
+    const currentStatus = await getOrderStatus(rowIndex);
+
     const result = await updateOrderStatus(rowIndex, status);
+
+    // Log audit entry
+    await addAuditEntry({ orderRowIndex: rowIndex, previousStatus: currentStatus, newStatus: status });
+
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error updating order status:', error.message);
