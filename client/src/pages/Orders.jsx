@@ -391,6 +391,7 @@ export default function Orders() {
                     { key: 'orderFrom', label: 'Source' },
                     { key: 'customerName', label: 'Customer' },
                     { key: 'productOrdered', label: 'Product' },
+                    { key: 'quantityOrdered', label: 'Qty' },
                     { key: 'modeOfPayment', label: 'Payment' },
                     { key: 'pricePaid', label: 'Price' },
                     { key: 'profit', label: 'Profit' },
@@ -419,6 +420,7 @@ export default function Orders() {
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-900">{order.customerName}</td>
                     <td className="px-4 py-3 text-gray-600">{order.productOrdered}</td>
+                    <td className="px-4 py-3 text-center text-gray-600">{order.quantityOrdered}</td>
                     <td className="px-4 py-3 text-gray-600">{order.modeOfPayment}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(order.pricePaid)}</td>
                     <td className={`px-4 py-3 font-medium ${order.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -442,7 +444,7 @@ export default function Orders() {
                 ))}
                 {sortedOrders.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500">No orders found</td>
+                    <td colSpan={10} className="px-4 py-8 text-center text-gray-500">No orders found</td>
                   </tr>
                 )}
               </tbody>
