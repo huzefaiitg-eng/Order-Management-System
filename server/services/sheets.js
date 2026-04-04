@@ -65,10 +65,10 @@ function rowToOrder(row, rowIndex) {
   };
 }
 
-async function getAllOrders() {
+async function getAllOrders(sheetId) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: 'Orders!A2:K',
   });
 
@@ -76,12 +76,12 @@ async function getAllOrders() {
   return rows.map((row, i) => rowToOrder(row, i + 2));
 }
 
-async function updateOrderStatus(rowIndex, newStatus) {
+async function updateOrderStatus(sheetId, rowIndex, newStatus) {
   const sheets = await getClient();
   const cell = `Orders!K${rowIndex}`;
 
   await sheets.spreadsheets.values.update({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: cell,
     valueInputOption: 'RAW',
     requestBody: {
@@ -119,10 +119,10 @@ function rowToCustomer(row, rowIndex) {
   };
 }
 
-async function getAllCustomers() {
+async function getAllCustomers(sheetId) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: 'Customers!A2:H',
   });
 
@@ -130,20 +130,18 @@ async function getAllCustomers() {
   return rows.map((row, i) => rowToCustomer(row, i + 2));
 }
 
-async function getCustomerByPhone(phone) {
-  const customers = await getAllCustomers();
+async function getCustomerByPhone(sheetId, phone) {
+  const customers = await getAllCustomers(sheetId);
   return customers.find(c => c.customerPhone === phone) || null;
 }
 
-async function addCustomer({ customerName, customerPhone, customerAddress, customerEmail }) {
-  const customers = await getAllCustomers();
+async function addCustomer(sheetId, { customerName, customerPhone, customerAddress, customerEmail }) {
+  const customers = await getAllCustomers(sheetId);
 
-  // Check duplicate phone
   if (customers.find(c => c.customerPhone === customerPhone)) {
     throw new Error('A customer with this phone number already exists');
   }
 
-  // Auto-generate Customer ID
   const maxNum = customers.reduce((max, c) => {
     const num = parseInt(c.customerId.replace('CUST', '')) || 0;
     return Math.max(max, num);
@@ -152,7 +150,7 @@ async function addCustomer({ customerName, customerPhone, customerAddress, custo
 
   const sheets = await getClient();
   await sheets.spreadsheets.values.append({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: 'Customers!A:H',
     valueInputOption: 'RAW',
     requestBody: {
@@ -172,8 +170,8 @@ async function addCustomer({ customerName, customerPhone, customerAddress, custo
   };
 }
 
-async function updateCustomer(phone, updates) {
-  const customers = await getAllCustomers();
+async function updateCustomer(sheetId, phone, updates) {
+  const customers = await getAllCustomers(sheetId);
   const customer = customers.find(c => c.customerPhone === phone);
   if (!customer) throw new Error('Customer not found');
 
@@ -188,7 +186,7 @@ async function updateCustomer(phone, updates) {
 
   if (data.length > 0) {
     await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: env.GOOGLE_SHEET_ID,
+      spreadsheetId: sheetId,
       requestBody: { valueInputOption: 'RAW', data },
     });
   }
@@ -231,10 +229,10 @@ function rowToProduct(row, rowIndex) {
   };
 }
 
-async function getAllInventory() {
+async function getAllInventory(sheetId) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: 'Inventory!A2:J',
   });
 
@@ -242,15 +240,14 @@ async function getAllInventory() {
   return rows.map((row, i) => rowToProduct(row, i + 2));
 }
 
-async function getProductByArticleId(articleId) {
-  const products = await getAllInventory();
+async function getProductByArticleId(sheetId, articleId) {
+  const products = await getAllInventory(sheetId);
   return products.find(p => p.articleId === articleId) || null;
 }
 
-async function addProduct({ productName, productDescription, category, subCategory, productImages, productCost, instockQuantity }) {
-  const products = await getAllInventory();
+async function addProduct(sheetId, { productName, productDescription, category, subCategory, productImages, productCost, instockQuantity }) {
+  const products = await getAllInventory(sheetId);
 
-  // Auto-generate Article ID
   const maxNum = products.reduce((max, p) => {
     const num = parseInt(p.articleId.replace('ART-', '')) || 0;
     return Math.max(max, num);
@@ -259,7 +256,7 @@ async function addProduct({ productName, productDescription, category, subCatego
 
   const sheets = await getClient();
   await sheets.spreadsheets.values.append({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: 'Inventory!A:J',
     valueInputOption: 'RAW',
     requestBody: {
@@ -282,8 +279,8 @@ async function addProduct({ productName, productDescription, category, subCatego
   };
 }
 
-async function updateProduct(articleId, updates) {
-  const products = await getAllInventory();
+async function updateProduct(sheetId, articleId, updates) {
+  const products = await getAllInventory(sheetId);
   const product = products.find(p => p.articleId === articleId);
   if (!product) throw new Error('Product not found');
 
@@ -300,7 +297,7 @@ async function updateProduct(articleId, updates) {
 
   if (data.length > 0) {
     await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: env.GOOGLE_SHEET_ID,
+      spreadsheetId: sheetId,
       requestBody: { valueInputOption: 'RAW', data },
     });
   }
@@ -308,10 +305,10 @@ async function updateProduct(articleId, updates) {
   return { ...product, ...updates };
 }
 
-async function addOrder({ orderFrom, orderDate, customerName, customerPhone, customerAddress, modeOfPayment, productOrdered, productCost, quantityOrdered, pricePaid }) {
+async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerPhone, customerAddress, modeOfPayment, productOrdered, productCost, quantityOrdered, pricePaid }) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.append({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: 'Orders!A:K',
     valueInputOption: 'RAW',
     requestBody: {
@@ -319,7 +316,6 @@ async function addOrder({ orderFrom, orderDate, customerName, customerPhone, cus
     },
   });
 
-  // Extract row index from updatedRange (e.g. "Orders!A15:K15" → 15)
   const updatedRange = response.data.updates.updatedRange;
   const match = updatedRange.match(/(\d+)/g);
   const newRowIndex = parseInt(match[match.length - 1]);
@@ -341,10 +337,10 @@ async function addOrder({ orderFrom, orderDate, customerName, customerPhone, cus
   };
 }
 
-async function getOrderStatus(rowIndex) {
+async function getOrderStatus(sheetId, rowIndex) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: `Orders!K${rowIndex}`,
   });
   const values = response.data.values;
@@ -353,11 +349,11 @@ async function getOrderStatus(rowIndex) {
 
 // ── Audit ───────────────────────────────────────────────────
 
-async function addAuditEntry({ orderRowIndex, previousStatus, newStatus }) {
+async function addAuditEntry(sheetId, { orderRowIndex, previousStatus, newStatus }) {
   const changedAt = new Date().toISOString();
   const sheets = await getClient();
   await sheets.spreadsheets.values.append({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: "'Audit History'!A:D",
     valueInputOption: 'RAW',
     requestBody: {
@@ -367,10 +363,10 @@ async function addAuditEntry({ orderRowIndex, previousStatus, newStatus }) {
   return { orderRowIndex, previousStatus, newStatus, changedAt };
 }
 
-async function getAuditHistory(orderRowIndex) {
+async function getAuditHistory(sheetId, orderRowIndex) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: "'Audit History'!A2:D",
   });
 
@@ -386,19 +382,19 @@ async function getAuditHistory(orderRowIndex) {
     .sort((a, b) => new Date(a.changedAt) - new Date(b.changedAt));
 }
 
-async function getSheetNames() {
+async function getSheetNames(sheetId) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.get({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     fields: 'sheets.properties.title',
   });
   return response.data.sheets.map(s => s.properties.title);
 }
 
-async function getSheetId(sheetName) {
+async function getSheetId(sheetId, sheetName) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.get({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     fields: 'sheets.properties',
   });
   const sheet = response.data.sheets.find(s => s.properties.title === sheetName);
@@ -408,14 +404,14 @@ async function getSheetId(sheetName) {
 
 // ── Archive / Unarchive / Delete — Customers ─────────────────
 
-async function archiveCustomer(phone) {
-  const customers = await getAllCustomers();
+async function archiveCustomer(sheetId, phone) {
+  const customers = await getAllCustomers(sheetId);
   const customer = customers.find(c => c.customerPhone === phone);
   if (!customer) throw new Error('Customer not found');
 
   const sheets = await getClient();
   await sheets.spreadsheets.values.update({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: `Customers!H${customer.rowIndex}`,
     valueInputOption: 'RAW',
     requestBody: { values: [['Archived']] },
@@ -424,14 +420,14 @@ async function archiveCustomer(phone) {
   return { ...customer, status: 'Archived' };
 }
 
-async function unarchiveCustomer(phone) {
-  const customers = await getAllCustomers();
+async function unarchiveCustomer(sheetId, phone) {
+  const customers = await getAllCustomers(sheetId);
   const customer = customers.find(c => c.customerPhone === phone);
   if (!customer) throw new Error('Customer not found');
 
   const sheets = await getClient();
   await sheets.spreadsheets.values.update({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: `Customers!H${customer.rowIndex}`,
     valueInputOption: 'RAW',
     requestBody: { values: [['Active']] },
@@ -440,21 +436,21 @@ async function unarchiveCustomer(phone) {
   return { ...customer, status: 'Active' };
 }
 
-async function deleteCustomer(phone) {
-  const customers = await getAllCustomers();
+async function deleteCustomer(sheetId, phone) {
+  const customers = await getAllCustomers(sheetId);
   const customer = customers.find(c => c.customerPhone === phone);
   if (!customer) throw new Error('Customer not found');
 
-  const sheetId = await getSheetId('Customers');
+  const tabSheetId = await getSheetId(sheetId, 'Customers');
   const sheets = await getClient();
 
   await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     requestBody: {
       requests: [{
         deleteDimension: {
           range: {
-            sheetId,
+            sheetId: tabSheetId,
             dimension: 'ROWS',
             startIndex: customer.rowIndex - 1,
             endIndex: customer.rowIndex,
@@ -469,14 +465,14 @@ async function deleteCustomer(phone) {
 
 // ── Archive / Unarchive / Delete — Inventory ─────────────────
 
-async function archiveProduct(articleId) {
-  const products = await getAllInventory();
+async function archiveProduct(sheetId, articleId) {
+  const products = await getAllInventory(sheetId);
   const product = products.find(p => p.articleId === articleId);
   if (!product) throw new Error('Product not found');
 
   const sheets = await getClient();
   await sheets.spreadsheets.values.update({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: `Inventory!J${product.rowIndex}`,
     valueInputOption: 'RAW',
     requestBody: { values: [['Archived']] },
@@ -485,14 +481,14 @@ async function archiveProduct(articleId) {
   return { ...product, status: 'Archived' };
 }
 
-async function unarchiveProduct(articleId) {
-  const products = await getAllInventory();
+async function unarchiveProduct(sheetId, articleId) {
+  const products = await getAllInventory(sheetId);
   const product = products.find(p => p.articleId === articleId);
   if (!product) throw new Error('Product not found');
 
   const sheets = await getClient();
   await sheets.spreadsheets.values.update({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     range: `Inventory!J${product.rowIndex}`,
     valueInputOption: 'RAW',
     requestBody: { values: [['Active']] },
@@ -501,21 +497,21 @@ async function unarchiveProduct(articleId) {
   return { ...product, status: 'Active' };
 }
 
-async function deleteProduct(articleId) {
-  const products = await getAllInventory();
+async function deleteProduct(sheetId, articleId) {
+  const products = await getAllInventory(sheetId);
   const product = products.find(p => p.articleId === articleId);
   if (!product) throw new Error('Product not found');
 
-  const sheetId = await getSheetId('Inventory');
+  const tabSheetId = await getSheetId(sheetId, 'Inventory');
   const sheets = await getClient();
 
   await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetId,
     requestBody: {
       requests: [{
         deleteDimension: {
           range: {
-            sheetId,
+            sheetId: tabSheetId,
             dimension: 'ROWS',
             startIndex: product.rowIndex - 1,
             endIndex: product.rowIndex,
@@ -529,6 +525,7 @@ async function deleteProduct(articleId) {
 }
 
 module.exports = {
+  getClient,
   getAllOrders, updateOrderStatus, addOrder, getOrderStatus,
   getAllCustomers, getCustomerByPhone, addCustomer, updateCustomer,
   archiveCustomer, unarchiveCustomer, deleteCustomer,

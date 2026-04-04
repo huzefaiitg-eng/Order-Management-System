@@ -2,16 +2,30 @@ const BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
   : '/api';
 
+const TOKEN_KEY = 'oms_token';
+
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
 async function request(url, options = {}) {
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json', ...options.headers };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   let res;
   try {
-    res = await fetch(`${BASE_URL}${url}`, {
-      headers: { 'Content-Type': 'application/json' },
-      ...options,
-    });
+    res = await fetch(`${BASE_URL}${url}`, { ...options, headers });
   } catch (err) {
     throw new Error('Network error: could not reach the server');
   }
+
+  if (res.status === 401) {
+    localStorage.removeItem(TOKEN_KEY);
+    window.location.href = '/login';
+    throw new Error('Session expired. Please log in again.');
+  }
+
   let data;
   try {
     data = await res.json();
@@ -22,6 +36,40 @@ async function request(url, options = {}) {
   return data.data;
 }
 
+// Auth
+export async function login(email, password) {
+  const res = await fetch(`${BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Login failed');
+  localStorage.setItem(TOKEN_KEY, data.data.token);
+  return data.data;
+}
+
+export function fetchProfile() {
+  return request('/auth/profile');
+}
+
+export function updateProfile(updates) {
+  return request('/auth/profile', {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+}
+
+export function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+  window.location.href = '/login';
+}
+
+export function isAuthenticated() {
+  return !!getToken();
+}
+
+// Orders
 export function fetchOrders(filters = {}) {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
@@ -38,6 +86,18 @@ export function updateOrderStatus(rowIndex, status) {
   });
 }
 
+export function addOrder(orderData) {
+  return request('/orders', {
+    method: 'POST',
+    body: JSON.stringify(orderData),
+  });
+}
+
+export function fetchOrderAudit(rowIndex) {
+  return request(`/orders/${rowIndex}/audit`);
+}
+
+// Dashboard & Insights
 export function fetchDashboard() {
   return request('/dashboard');
 }
@@ -46,6 +106,7 @@ export function fetchInsights() {
   return request('/insights');
 }
 
+// Customers
 export function fetchCustomers(search = '', status = 'Active') {
   const params = new URLSearchParams();
   if (search) params.append('search', search);
@@ -58,6 +119,33 @@ export function fetchCustomerByPhone(phone) {
   return request(`/customers/${encodeURIComponent(phone)}`);
 }
 
+export function addCustomer(customerData) {
+  return request('/customers', {
+    method: 'POST',
+    body: JSON.stringify(customerData),
+  });
+}
+
+export function updateCustomer(phone, updates) {
+  return request(`/customers/${encodeURIComponent(phone)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+}
+
+export function archiveCustomer(phone) {
+  return request(`/customers/${encodeURIComponent(phone)}/archive`, { method: 'PATCH' });
+}
+
+export function unarchiveCustomer(phone) {
+  return request(`/customers/${encodeURIComponent(phone)}/unarchive`, { method: 'PATCH' });
+}
+
+export function deleteCustomer(phone) {
+  return request(`/customers/${encodeURIComponent(phone)}`, { method: 'DELETE' });
+}
+
+// Inventory
 export function fetchInventory(filters = {}) {
   const params = new URLSearchParams();
   const withDefaults = { status: 'Active', ...filters };
@@ -76,20 +164,6 @@ export function fetchProductByArticleId(articleId) {
   return request(`/inventory/${encodeURIComponent(articleId)}`);
 }
 
-export function addCustomer(customerData) {
-  return request('/customers', {
-    method: 'POST',
-    body: JSON.stringify(customerData),
-  });
-}
-
-export function updateCustomer(phone, updates) {
-  return request(`/customers/${encodeURIComponent(phone)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  });
-}
-
 export function addProduct(productData) {
   return request('/inventory', {
     method: 'POST',
@@ -104,18 +178,6 @@ export function updateProduct(articleId, updates) {
   });
 }
 
-export function archiveCustomer(phone) {
-  return request(`/customers/${encodeURIComponent(phone)}/archive`, { method: 'PATCH' });
-}
-
-export function unarchiveCustomer(phone) {
-  return request(`/customers/${encodeURIComponent(phone)}/unarchive`, { method: 'PATCH' });
-}
-
-export function deleteCustomer(phone) {
-  return request(`/customers/${encodeURIComponent(phone)}`, { method: 'DELETE' });
-}
-
 export function archiveProduct(articleId) {
   return request(`/inventory/${encodeURIComponent(articleId)}/archive`, { method: 'PATCH' });
 }
@@ -126,15 +188,4 @@ export function unarchiveProduct(articleId) {
 
 export function deleteProduct(articleId) {
   return request(`/inventory/${encodeURIComponent(articleId)}`, { method: 'DELETE' });
-}
-
-export function addOrder(orderData) {
-  return request('/orders', {
-    method: 'POST',
-    body: JSON.stringify(orderData),
-  });
-}
-
-export function fetchOrderAudit(rowIndex) {
-  return request(`/orders/${rowIndex}/audit`);
 }

@@ -183,10 +183,11 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 ### Frontend Structure
 ```
 src/
-  components/       # Reusable UI components (StatusBadge, StockBadge, KpiCard, etc.)
-  pages/            # Dashboard, Orders, OrderDetail, Inventory, ProductDetail, Customers, CustomerDetail, Insights
+  components/       # Reusable UI components (StatusBadge, StockBadge, KpiCard, ProtectedRoute, etc.)
+  context/          # React contexts (AuthContext)
+  pages/            # Dashboard, Orders, OrderDetail, Inventory, ProductDetail, Customers, CustomerDetail, Insights, Login, Profile
   hooks/            # Custom hooks (useOrders, useDashboard, useCustomers, useInventory, useInsights)
-  services/         # API client functions
+  services/         # API client functions (includes auth: login, logout, fetchProfile, updateProfile)
   utils/            # Formatters, helpers
   App.jsx
   main.jsx
@@ -195,12 +196,14 @@ src/
 ### Backend Structure
 ```
 server/
-  index.js          # Express server entry point
-  routes/           # API route handlers (orders, dashboard, insights, customers, inventory)
-  services/         # Google Sheets service layer
+  index.js          # Express server entry point (auth middleware gate)
+  middleware/       # Auth middleware (JWT validation)
+  routes/           # API route handlers (auth, orders, dashboard, insights, customers, inventory)
+  services/         # Google Sheets service layer, User Access service
   config/           # Sheets config, env setup
   seed.js           # Seed script for Orders data
   seed-inventory.js # Seed script for Inventory data
+  seed-users.js     # Seed script for demo user in User Access sheet
   credentials.json  # Google Service Account key (gitignored)
 ```
 
@@ -228,9 +231,56 @@ server/
 - `PATCH /api/inventory/:articleId` — Update product details (name, category, sub-category, cost, instock qty)
 
 ## Authentication
-- Google Sheets API accessed via **Service Account** (JSON key file stored on backend)
+
+### Google Sheets API
+- Accessed via **Service Account** (JSON key file stored on backend)
 - The Google Sheet must be shared with the service account email address
-- No user-facing authentication required for v1
+
+### User Authentication (JWT)
+- Users are stored in a separate **User Access Google Sheet** (configured via `USER_ACCESS_SHEET_ID`)
+- Login validates email + password against the User Access sheet
+- On success, a JWT token (7-day expiry) is issued containing `{ email, sheetId }`
+- The `sheetId` is extracted from the user's "Order Sheet Link" column — each user has their own data sheet
+- All protected API routes require `Authorization: Bearer <token>` header
+- Auth middleware sets `req.user = { email, sheetId }` on every request
+- Frontend stores token in `localStorage` as `oms_token`
+- On 401 response, frontend clears token and redirects to `/login`
+
+### User Access Google Sheet Schema
+| Column | Description |
+|---|---|
+| Name | User's full name |
+| Company Name | Business/company name |
+| Email | Login email (case-insensitive) |
+| Phone | Contact number |
+| Address | Business address |
+| Website | Business website |
+| Password | Login password (plain text) |
+| Order Sheet Link | Full Google Sheets URL for this user's order data |
+
+### Auth API Endpoints
+- `POST /api/auth/login` — Validate credentials, return JWT token + user profile (public)
+- `GET /api/auth/profile` — Fetch current user profile (protected)
+- `PATCH /api/auth/profile` — Update user profile: name, companyName, phone, address, website (protected)
+
+### Auth Flow
+1. User navigates to app → redirected to `/login` if no valid token
+2. User enters email + password → `POST /api/auth/login` validates against User Access sheet
+3. JWT issued with `{ email, sheetId }` → stored in localStorage
+4. All subsequent API requests include `Authorization: Bearer <token>`
+5. Backend extracts `sheetId` from token → queries the user's specific Google Sheet
+
+### Frontend Auth Components
+- `AuthContext` (`client/src/context/AuthContext.jsx`) — provides `user`, `loading`, `login()`, `logout()`, `updateUser()`
+- `ProtectedRoute` (`client/src/components/ProtectedRoute.jsx`) — redirects to `/login` if unauthenticated
+- `Login` page (`client/src/pages/Login.jsx`) — centered login form with logo
+- `Profile` page (`client/src/pages/Profile.jsx`) — editable user info (email disabled)
+- `Navbar` avatar — terracotta circle with user initials, dropdown with Profile + Logout
+
+### Demo Account
+- Email: `demo@kanchwalahozefa.com`
+- Password: `demo@12345`
+- Seed script: `cd server && node seed-users.js`
 
 ## Environment Variables
 ```
@@ -240,6 +290,8 @@ GOOGLE_CREDENTIALS=<json-string>              # Production (env var with full JS
 PORT=3001
 CLIENT_URL=<frontend-url>                     # CORS origin for production
 VITE_API_URL=<backend-url>                    # Frontend env var for API base URL
+USER_ACCESS_SHEET_ID=<user-access-sheet-id>   # Google Sheet ID for user credentials
+JWT_SECRET=<jwt-secret>                       # Secret for signing JWT tokens
 ```
 
 ## Deployment
@@ -258,6 +310,7 @@ cd server && npm install && npm run dev
 # Seed data
 cd server && node seed.js          # Seed 100 orders
 cd server && node seed-inventory.js # Seed 20 products
+cd server && node seed-users.js    # Seed demo user in User Access sheet
 ```
 
 ## Conventions
