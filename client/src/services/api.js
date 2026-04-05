@@ -22,7 +22,6 @@ async function request(url, options = {}) {
 
   if (res.status === 401) {
     localStorage.removeItem(TOKEN_KEY);
-    window.location.href = '/login';
     throw new Error('Session expired. Please log in again.');
   }
 

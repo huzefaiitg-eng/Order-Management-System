@@ -15,9 +15,17 @@ export function AuthProvider({ children }) {
     }
     fetchProfile()
       .then(setUser)
-      .catch(() => {
-        localStorage.removeItem('oms_token');
-        setUser(null);
+      .catch((err) => {
+        // Only clear the token if it's actually invalid/expired (401).
+        // Network errors or server 500s (e.g. cold start on Render) should
+        // NOT log the user out — keep the token and let them retry.
+        const msg = err?.message || '';
+        if (msg.includes('Session expired') || msg.includes('Authentication required') || msg.includes('Invalid or expired token')) {
+          localStorage.removeItem('oms_token');
+          setUser(null);
+        }
+        // For any other error (network down, 500, etc.) just leave user as null
+        // so ProtectedRoute redirects to login, but the token is preserved.
       })
       .finally(() => setLoading(false));
   }, []);
