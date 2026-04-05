@@ -13,7 +13,9 @@ const inventoryRouter = require('./routes/inventory');
 const app = express();
 
 app.use(cors({
-  origin: process.env.CLIENT_URL || '*',
+  origin: process.env.CLIENT_URL
+    ? process.env.CLIENT_URL.split(',').map(u => u.trim())
+    : '*',
 }));
 app.use(express.json());
 
