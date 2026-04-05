@@ -124,61 +124,75 @@ export default function Dashboard() {
 
         {/* Preset buttons row */}
         <div className="flex flex-wrap items-center gap-2">
-          {PRESETS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => handlePresetClick(key)}
-              className={`px-2.5 py-1.5 text-xs sm:text-sm rounded-lg font-medium transition-colors ${
-                preset === key
-                  ? 'bg-terracotta-600 text-white'
-                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Custom date popover */}
-        {showPopover && (
-          <div className="relative" ref={popoverRef}>
-            <div className="absolute left-0 top-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-4 w-72">
-              <p className="text-sm font-semibold text-gray-800 mb-3">Select date range</p>
-              <div className="space-y-2.5">
-                <div>
-                  <label className="text-xs font-medium text-gray-500 block mb-1">From</label>
-                  <input
-                    type="date"
-                    value={pendingCustom.startDate}
-                    onChange={e => setPendingCustom(r => ({ ...r, startDate: e.target.value }))}
-                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-transparent"
-                  />
+          {PRESETS.map(({ key, label }) => {
+            if (key === 'custom') {
+              return (
+                <div key="custom" className="relative" ref={popoverRef}>
+                  <button
+                    onClick={() => handlePresetClick('custom')}
+                    className={`px-2.5 py-1.5 text-xs sm:text-sm rounded-lg font-medium transition-colors ${
+                      preset === 'custom'
+                        ? 'bg-terracotta-600 text-white'
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                  {showPopover && (
+                    <div className="absolute right-0 top-10 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-4 w-72">
+                      <p className="text-sm font-semibold text-gray-800 mb-3">Select date range</p>
+                      <div className="space-y-2.5">
+                        <div>
+                          <label className="text-xs font-medium text-gray-500 block mb-1">From</label>
+                          <input
+                            type="date"
+                            value={pendingCustom.startDate}
+                            onChange={e => setPendingCustom(r => ({ ...r, startDate: e.target.value }))}
+                            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-500 block mb-1">To</label>
+                          <input
+                            type="date"
+                            value={pendingCustom.endDate}
+                            min={pendingCustom.startDate || undefined}
+                            onChange={e => setPendingCustom(r => ({ ...r, endDate: e.target.value }))}
+                            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleApply}
+                        disabled={!pendingCustom.startDate || !pendingCustom.endDate}
+                        className="mt-4 w-full py-2 bg-terracotta-600 text-white text-sm font-medium rounded-lg hover:bg-terracotta-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-500 block mb-1">To</label>
-                  <input
-                    type="date"
-                    value={pendingCustom.endDate}
-                    min={pendingCustom.startDate || undefined}
-                    onChange={e => setPendingCustom(r => ({ ...r, endDate: e.target.value }))}
-                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
+              );
+            }
+            return (
               <button
-                onClick={handleApply}
-                disabled={!pendingCustom.startDate || !pendingCustom.endDate}
-                className="mt-4 w-full py-2 bg-terracotta-600 text-white text-sm font-medium rounded-lg hover:bg-terracotta-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                key={key}
+                onClick={() => handlePresetClick(key)}
+                className={`px-2.5 py-1.5 text-xs sm:text-sm rounded-lg font-medium transition-colors ${
+                  preset === key
+                    ? 'bg-terracotta-600 text-white'
+                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
               >
-                Apply
+                {label}
               </button>
-            </div>
-          </div>
-        )}
+            );
+          })}
+        </div>
 
         {/* Active date range pill (Last 7, Last 30, Custom applied) */}
         {pillRange && (
-          <div className={`flex items-center gap-2 ${showPopover ? 'mt-24 sm:mt-20' : ''}`}>
+          <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 bg-terracotta-50 border border-terracotta-200 text-terracotta-700 text-xs sm:text-sm rounded-full px-3 py-1 font-medium">
               <Calendar size={13} />
               {formatPillDate(pillRange.startDate)} → {formatPillDate(pillRange.endDate)}
