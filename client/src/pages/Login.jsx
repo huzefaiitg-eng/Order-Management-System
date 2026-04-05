@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Wifi } from 'lucide-react';
 import logo from '../assets/logo.png';
+
+const BASE_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : '/api';
 
 export default function Login() {
   const { user, login } = useAuth();
@@ -12,6 +16,30 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [serverWaking, setServerWaking] = useState(false);
+
+  // Pre-warm the backend as soon as the login page loads
+  useEffect(() => {
+    let cancelled = false;
+    async function pingServer() {
+      try {
+        const res = await fetch(`${BASE_URL}/health`);
+        if (!res.ok) throw new Error('not ok');
+      } catch {
+        // Server might be sleeping — show a gentle notice and retry
+        if (cancelled) return;
+        setServerWaking(true);
+        // Retry once after 5s to trigger the wake-up
+        setTimeout(async () => {
+          if (cancelled) return;
+          try { await fetch(`${BASE_URL}/health`); } catch { /* ignore */ }
+          if (!cancelled) setServerWaking(false);
+        }, 5000);
+      }
+    }
+    pingServer();
+    return () => { cancelled = true; };
+  }, []);
 
   if (user) {
     return <Navigate to="/" replace />;
@@ -36,10 +64,17 @@ export default function Login() {
       <div className="w-full max-w-sm">
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
           <div className="flex justify-center mb-8">
-            <img src={logo} alt="Bombay Stride" className="h-10" />
+            <img src={logo} alt="Logo" className="h-10" />
           </div>
 
           <h1 className="text-xl font-bold text-gray-900 text-center mb-6">Sign in to your account</h1>
+
+          {serverWaking && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700 flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin shrink-0" />
+              Server is starting up, this may take ~15 seconds on first load…
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
@@ -87,7 +122,7 @@ export default function Login() {
               className="w-full py-2.5 bg-terracotta-600 text-white rounded-lg text-sm font-medium hover:bg-terracotta-700 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading && <Loader2 size={16} className="animate-spin" />}
-              Sign In
+              {loading ? 'Signing in…' : 'Sign In'}
             </button>
           </form>
 

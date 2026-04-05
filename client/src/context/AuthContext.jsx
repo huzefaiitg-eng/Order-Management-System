@@ -3,6 +3,17 @@ import { fetchProfile, login as apiLogin, logout as apiLogout } from '../service
 
 const AuthContext = createContext(null);
 
+// Wrap a promise with a timeout so we never hang the loading screen forever
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms);
+    promise.then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); }
+    );
+  });
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -13,19 +24,24 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
-    fetchProfile()
+    // Give the profile fetch up to 20 seconds (Render free-tier cold start).
+    // If it times out or fails for a non-auth reason, keep the token so the
+    // user can log in again without having to re-enter credentials.
+    withTimeout(fetchProfile(), 20000)
       .then(setUser)
       .catch((err) => {
-        // Only clear the token if it's actually invalid/expired (401).
-        // Network errors or server 500s (e.g. cold start on Render) should
-        // NOT log the user out — keep the token and let them retry.
         const msg = err?.message || '';
-        if (msg.includes('Session expired') || msg.includes('Authentication required') || msg.includes('Invalid or expired token')) {
+        const isAuthError =
+          msg.includes('Session expired') ||
+          msg.includes('Authentication required') ||
+          msg.includes('Invalid or expired token');
+        if (isAuthError) {
           localStorage.removeItem('oms_token');
           setUser(null);
         }
-        // For any other error (network down, 500, etc.) just leave user as null
-        // so ProtectedRoute redirects to login, but the token is preserved.
+        // For network errors, timeouts, or server 500s — keep the token;
+        // user stays null → ProtectedRoute sends them to /login where they
+        // can sign in again (token preserved so the page ping can wake server).
       })
       .finally(() => setLoading(false));
   }, []);
