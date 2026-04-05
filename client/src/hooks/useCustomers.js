@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchCustomers } from '../services/api';
 
-export function useCustomers(search = '', status = 'Active') {
+export function useCustomers(search = '', status = 'Active', hasActiveOrders = false) {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -10,14 +10,14 @@ export function useCustomers(search = '', status = 'Active') {
     try {
       setLoading(true);
       setError(null);
-      const data = await fetchCustomers(search, status);
+      const data = await fetchCustomers(search, status, hasActiveOrders);
       setCustomers(data);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [search, status]);
+  }, [search, status, hasActiveOrders]);
 
   useEffect(() => { load(); }, [load]);
 

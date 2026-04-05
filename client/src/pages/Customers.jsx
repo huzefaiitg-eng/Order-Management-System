@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, RefreshCw, User, Phone, MapPin, Mail, ShoppingBag, Zap, Plus, X, Archive } from 'lucide-react';
 import { useCustomers } from '../hooks/useCustomers';
 import { addCustomer, archiveCustomer } from '../services/api';
@@ -72,9 +72,13 @@ function AddCustomerModal({ onClose, onAdded }) {
 }
 
 export default function Customers() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const hasActiveOrdersParam = searchParams.get('hasActiveOrders') === 'true';
+
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
-  const { customers, loading, error, refresh } = useCustomers(query);
+  const { customers, loading, error, refresh } = useCustomers(query, 'Active', hasActiveOrdersParam);
   const [showAddModal, setShowAddModal] = useState(false);
   const [archiving, setArchiving] = useState(null);
 
@@ -140,6 +144,23 @@ export default function Customers() {
           </button>
         </div>
       </div>
+
+      {/* Active filter badge */}
+      {hasActiveOrdersParam && (
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 text-xs rounded-full px-3 py-1 font-medium">
+            <Zap size={12} />
+            Showing: Active Customers only
+            <button
+              onClick={() => navigate('/customers')}
+              className="ml-1 hover:text-green-900"
+              aria-label="Clear filter"
+            >
+              <X size={12} />
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* Summary Cards */}
       {!loading && !error && (

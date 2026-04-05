@@ -111,10 +111,11 @@ export function fetchInsights() {
 }
 
 // Customers
-export function fetchCustomers(search = '', status = 'Active') {
+export function fetchCustomers(search = '', status = 'Active', hasActiveOrders = false) {
   const params = new URLSearchParams();
   if (search) params.append('search', search);
   if (status) params.append('status', status);
+  if (hasActiveOrders) params.append('hasActiveOrders', 'true');
   const query = params.toString();
   return request(`/customers${query ? `?${query}` : ''}`);
 }

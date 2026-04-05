@@ -1,13 +1,15 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingBag, IndianRupee, TrendingUp, BarChart3, RotateCcw, Calendar, Users, Package, X } from 'lucide-react';
+import {
+  ShoppingBag, IndianRupee, TrendingUp, BarChart3, RotateCcw,
+  Calendar, Users, Package, X, Zap, AlertTriangle, PackageX,
+} from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { useDashboard } from '../hooks/useDashboard';
 import { useIsMobile } from '../hooks/useIsMobile';
-import KpiCard from '../components/KpiCard';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 import { formatCurrency, formatPercent, CHART_COLORS } from '../utils/formatters';
@@ -59,24 +61,69 @@ function formatPillDate(isoStr) {
   });
 }
 
+// ── Inline sub-components ────────────────────────────────────────────────────
+
+function StatItem({ label, value, to, color }) {
+  const colorClass =
+    color === 'red' ? 'text-red-600' :
+    color === 'amber' ? 'text-amber-600' :
+    color === 'green' ? 'text-green-600' :
+    'text-gray-900';
+
+  const inner = (
+    <div className={`p-2.5 rounded-lg ${to ? 'hover:bg-gray-50 cursor-pointer transition-colors' : ''}`}>
+      <p className="text-xs text-gray-500 mb-0.5 leading-tight">{label}</p>
+      <p className={`text-lg sm:text-xl font-bold leading-tight ${colorClass}`}>{value ?? '—'}</p>
+    </div>
+  );
+  if (to) return <Link to={to} className="block">{inner}</Link>;
+  return inner;
+}
+
+function GroupCard({ title, icon: Icon, iconBg, children }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <div className={`p-1.5 rounded-lg ${iconBg}`}>
+          <Icon size={15} className="opacity-80" />
+        </div>
+        <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">{title}</h3>
+      </div>
+      <div className="h-px bg-gray-100 mb-3" />
+      {children}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
   const [preset, setPreset] = useState('all');
   const [pendingCustom, setPendingCustom] = useState({ startDate: '', endDate: '' });
   const [appliedCustom, setAppliedCustom] = useState({ startDate: '', endDate: '' });
   const [showPopover, setShowPopover] = useState(false);
+  const [popoverSide, setPopoverSide] = useState('right');
   const isMobile = useIsMobile();
-  const popoverRef = useRef(null);
+  const customBtnRef = useRef(null);
 
   // Close popover on outside click
   useEffect(() => {
     function handleClick(e) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
+      if (customBtnRef.current && !customBtnRef.current.contains(e.target)) {
         setShowPopover(false);
       }
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  // Detect which side the popover should open when it becomes visible
+  useEffect(() => {
+    if (showPopover && customBtnRef.current) {
+      const rect = customBtnRef.current.getBoundingClientRect();
+      setPopoverSide(window.innerWidth - rect.right < 292 ? 'left' : 'right');
+    }
+  }, [showPopover]);
 
   function handlePresetClick(key) {
     setPreset(key);
@@ -99,7 +146,6 @@ export default function Dashboard() {
   const filters = useMemo(() => getDateRange(preset, appliedCustom), [preset, appliedCustom]);
   const { data, loading, error } = useDashboard(filters);
 
-  // Pill date range (Last 7, Last 30, Custom applied only)
   const pillRange = useMemo(() => {
     if (preset === 'last7' || preset === 'last30') return getDateRange(preset, {});
     if (preset === 'custom' && appliedCustom.startDate && appliedCustom.endDate) return appliedCustom;
@@ -122,12 +168,12 @@ export default function Dashboard() {
       <div className="space-y-2">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
 
-        {/* Preset buttons row */}
+        {/* Preset buttons */}
         <div className="flex flex-wrap items-center gap-2">
           {PRESETS.map(({ key, label }) => {
             if (key === 'custom') {
               return (
-                <div key="custom" className="relative" ref={popoverRef}>
+                <div key="custom" className="relative" ref={customBtnRef}>
                   <button
                     onClick={() => handlePresetClick('custom')}
                     className={`px-2.5 py-1.5 text-xs sm:text-sm rounded-lg font-medium transition-colors ${
@@ -139,7 +185,9 @@ export default function Dashboard() {
                     {label}
                   </button>
                   {showPopover && (
-                    <div className="absolute right-0 top-10 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-4 w-72">
+                    <div
+                      className={`absolute ${popoverSide === 'right' ? 'left-0' : 'right-0'} top-10 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-4 w-72`}
+                    >
                       <p className="text-sm font-semibold text-gray-800 mb-3">Select date range</p>
                       <div className="space-y-2.5">
                         <div>
@@ -190,17 +238,13 @@ export default function Dashboard() {
           })}
         </div>
 
-        {/* Active date range pill (Last 7, Last 30, Custom applied) */}
+        {/* Active date range pill */}
         {pillRange && (
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 bg-terracotta-50 border border-terracotta-200 text-terracotta-700 text-xs sm:text-sm rounded-full px-3 py-1 font-medium">
               <Calendar size={13} />
               {formatPillDate(pillRange.startDate)} → {formatPillDate(pillRange.endDate)}
-              <button
-                onClick={resetToAllTime}
-                className="ml-1 hover:text-terracotta-900 flex items-center"
-                aria-label="Clear date filter"
-              >
+              <button onClick={resetToAllTime} className="ml-1 hover:text-terracotta-900 flex items-center" aria-label="Clear date filter">
                 <X size={13} />
               </button>
             </span>
@@ -208,26 +252,63 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Link to="/orders" className="block">
-          <KpiCard title="Total Orders" value={kpis.totalOrders} icon={ShoppingBag} color="terracotta" clickable />
-        </Link>
-        <Link to="/customers" className="block">
-          <KpiCard title="Total Customers" value={kpis.totalCustomers ?? '—'} icon={Users} color="blue" clickable />
-        </Link>
-        <Link to="/inventory" className="block">
-          <KpiCard title="Total Inventory" value={kpis.totalInventory ?? '—'} icon={Package} color="amber" clickable />
-        </Link>
-        <KpiCard title="Total Revenue" value={formatCurrency(kpis.totalRevenue)} icon={IndianRupee} color="green" />
-        <KpiCard title="Total Profit" value={formatCurrency(kpis.totalProfit)} icon={TrendingUp} color="blue" />
-        <KpiCard title="Avg Order Value" value={formatCurrency(kpis.avgOrderValue)} icon={BarChart3} color="amber" />
-        <KpiCard title="Return Rate" value={formatPercent(kpis.returnRate)} icon={RotateCcw} color="red" />
+      {/* ── KPI Groups ──────────────────────────────────────────────────────── */}
+
+      {/* Orders Group — full width */}
+      <GroupCard title="Orders" icon={ShoppingBag} iconBg="bg-terracotta-50 text-terracotta-600">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1">
+          <StatItem label="Total Orders" value={kpis.totalOrders} to="/orders" />
+          <StatItem label="Total Revenue" value={formatCurrency(kpis.totalRevenue)} color="green" />
+          <StatItem label="Total Profit" value={formatCurrency(kpis.totalProfit)} color="green" />
+          <StatItem label="Avg Order Value" value={formatCurrency(kpis.avgOrderValue)} />
+          <StatItem label="Return Rate" value={formatPercent(kpis.returnRate)} color="red" />
+        </div>
+      </GroupCard>
+
+      {/* Customers + Inventory Groups — side by side */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Customers Group */}
+        <GroupCard title="Customers" icon={Users} iconBg="bg-blue-50 text-blue-600">
+          <div className="grid grid-cols-3 gap-1">
+            <StatItem label="Total" value={kpis.totalCustomers ?? '—'} to="/customers" />
+            <StatItem
+              label="Active"
+              value={kpis.activeCustomers ?? '—'}
+              to="/customers?hasActiveOrders=true"
+              color="green"
+            />
+            <StatItem
+              label="New (7 days)"
+              value={kpis.newCustomers7d ?? '—'}
+              to="/customers"
+            />
+          </div>
+        </GroupCard>
+
+        {/* Inventory Group */}
+        <GroupCard title="Inventory" icon={Package} iconBg="bg-amber-50 text-amber-600">
+          <div className="grid grid-cols-3 gap-1">
+            <StatItem label="Total" value={kpis.totalInventory ?? '—'} to="/inventory" />
+            <StatItem
+              label="Low Stock"
+              value={kpis.lowStockCount ?? '—'}
+              to="/inventory?stockFilter=lowStock"
+              color="amber"
+            />
+            <StatItem
+              label="Out of Stock"
+              value={kpis.outOfStockCount ?? '—'}
+              to="/inventory?stockFilter=outOfStock"
+              color="red"
+            />
+          </div>
+        </GroupCard>
       </div>
+
+      {/* ── Charts ──────────────────────────────────────────────────────────── */}
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Orders by Source */}
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Orders by Source</h2>
           <div className="h-[220px] sm:h-[300px]">
@@ -247,7 +328,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Revenue & Profit Over Time */}
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Revenue & Profit Over Time</h2>
           <div className="h-[220px] sm:h-[300px]">
@@ -268,7 +348,6 @@ export default function Dashboard() {
 
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Order Status Breakdown */}
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Order Status Breakdown</h2>
           <div className="h-[250px] sm:h-[300px]">
@@ -296,7 +375,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Payment Mode Distribution */}
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Payment Mode Distribution</h2>
           <div className="h-[250px] sm:h-[300px]">

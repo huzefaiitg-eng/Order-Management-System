@@ -33,6 +33,28 @@ router.get('/', async (req, res) => {
     const returnedOrders = filtered.filter(o => o.orderStatus === 'Returned').length;
     const returnRate = totalOrders > 0 ? (returnedOrders / totalOrders) * 100 : 0;
 
+    // Customer KPIs (always full dataset, not date-filtered)
+    const activeCustomers = customers.filter(
+      c => c.status !== 'Archived' && c.anyActiveOrder === 'Yes'
+    ).length;
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const recentPhones = new Set(
+      orders.filter(o => {
+        const d = parseDate(o.orderDate);
+        return d && d >= sevenDaysAgo;
+      }).map(o => o.customerPhone).filter(Boolean)
+    );
+    const newCustomers7d = recentPhones.size;
+
+    // Inventory KPIs (always full dataset)
+    const outOfStockCount = inventory.filter(
+      p => p.status !== 'Archived' && p.instockQuantity === 0
+    ).length;
+    const lowStockCount = inventory.filter(
+      p => p.status !== 'Archived' && p.availableQuantity > 0 && p.availableQuantity < 5
+    ).length;
+
     const ordersBySource = {};
     filtered.forEach(o => {
       ordersBySource[o.orderFrom] = (ordersBySource[o.orderFrom] || 0) + 1;
@@ -66,7 +88,11 @@ router.get('/', async (req, res) => {
         kpis: {
           totalOrders, totalRevenue, totalProfit, avgOrderValue, returnRate,
           totalCustomers: customers.filter(c => c.status !== 'Archived').length,
+          activeCustomers,
+          newCustomers7d,
           totalInventory: inventory.filter(p => p.status !== 'Archived').length,
+          outOfStockCount,
+          lowStockCount,
         },
         ordersBySource: Object.entries(ordersBySource).map(([name, value]) => ({ name, value })),
         statusBreakdown: Object.entries(statusBreakdown).map(([name, value]) => ({ name, value })),

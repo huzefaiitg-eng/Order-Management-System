@@ -50,6 +50,10 @@ router.get('/', async (req, res) => {
     const statusFilter = req.query.status || 'Active';
     result = result.filter(c => c.status === statusFilter);
 
+    if (req.query.hasActiveOrders === 'true') {
+      result = result.filter(c => c.activeOrderCount > 0);
+    }
+
     const { search } = req.query;
     if (search) {
       const q = search.toLowerCase();

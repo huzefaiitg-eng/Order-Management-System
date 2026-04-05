@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee, Plus, X, Archive } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { fetchInventorySummary, addProduct, archiveProduct } from '../services/api';
@@ -103,6 +103,10 @@ function AddProductModal({ onClose, onAdded }) {
 }
 
 export default function Inventory() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const stockFilter = searchParams.get('stockFilter'); // 'lowStock' | 'outOfStock' | null
+
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [subCategory, setSubCategory] = useState('');
@@ -159,18 +163,23 @@ export default function Inventory() {
     }
   };
 
-  let sorted = [...products];
-  if (sortField) {
-    sorted.sort((a, b) => {
-      let aVal = a[sortField];
-      let bVal = b[sortField];
-      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
-      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }
+  const sorted = useMemo(() => {
+    let list = [...products];
+    if (sortField) {
+      list.sort((a, b) => {
+        let aVal = a[sortField];
+        let bVal = b[sortField];
+        if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+        if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+        if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    if (stockFilter === 'lowStock') return list.filter(p => p.availableQuantity > 0 && p.availableQuantity < 5);
+    if (stockFilter === 'outOfStock') return list.filter(p => p.instockQuantity === 0);
+    return list;
+  }, [products, sortField, sortDir, stockFilter]);
 
   return (
     <div className="p-6 space-y-4">
@@ -191,6 +200,27 @@ export default function Inventory() {
           </button>
         </div>
       </div>
+
+      {/* Stock filter badge */}
+      {stockFilter && (
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center gap-1.5 text-xs rounded-full px-3 py-1 font-medium border ${
+            stockFilter === 'outOfStock'
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-amber-50 border-amber-200 text-amber-700'
+          }`}>
+            {stockFilter === 'outOfStock' ? <PackageX size={12} /> : <AlertTriangle size={12} />}
+            Showing: {stockFilter === 'outOfStock' ? 'Out of Stock' : 'Low Stock'} only
+            <button
+              onClick={() => navigate('/inventory')}
+              className="ml-1 hover:opacity-70"
+              aria-label="Clear filter"
+            >
+              <X size={12} />
+            </button>
+          </span>
+        </div>
+      )}
 
       {/* KPI Cards */}
       {summary && (
