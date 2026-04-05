@@ -24,13 +24,16 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const avatarRef = useRef(null);
+  const desktopAvatarRef = useRef(null);
+  const mobileAvatarRef = useRef(null);
   const navRef = useRef(null);
 
-  // Close avatar dropdown on outside click
+  // Close avatar dropdown on outside click — check both desktop and mobile refs
   useEffect(() => {
     function handleClick(e) {
-      if (avatarRef.current && !avatarRef.current.contains(e.target)) setAvatarOpen(false);
+      const insideDesktop = desktopAvatarRef.current?.contains(e.target);
+      const insideMobile = mobileAvatarRef.current?.contains(e.target);
+      if (!insideDesktop && !insideMobile) setAvatarOpen(false);
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -67,7 +70,7 @@ export default function Navbar() {
           ))}
 
           {/* Desktop avatar */}
-          <div className="relative ml-4" ref={avatarRef}>
+          <div className="relative ml-4" ref={desktopAvatarRef}>
             <button
               onClick={() => setAvatarOpen(!avatarOpen)}
               className="w-9 h-9 rounded-full bg-terracotta-500 text-white text-sm font-bold flex items-center justify-center hover:bg-terracotta-600 transition-colors"
@@ -103,7 +106,7 @@ export default function Navbar() {
 
         {/* Mobile: avatar + hamburger */}
         <div className="flex items-center gap-3 md:hidden">
-          <div className="relative" ref={avatarRef}>
+          <div className="relative" ref={mobileAvatarRef}>
             <button
               onClick={() => setAvatarOpen(!avatarOpen)}
               className="w-8 h-8 rounded-full bg-terracotta-500 text-white text-xs font-bold flex items-center justify-center"
