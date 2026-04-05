@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingBag, IndianRupee, TrendingUp, BarChart3, RotateCcw, Calendar, Users, Package } from 'lucide-react';
+import { ShoppingBag, IndianRupee, TrendingUp, BarChart3, RotateCcw, Calendar, Users, Package, X } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -53,13 +53,58 @@ function getDateRange(preset, customRange) {
   }
 }
 
+function formatPillDate(isoStr) {
+  return new Date(isoStr + 'T00:00:00').toLocaleDateString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+}
+
 export default function Dashboard() {
   const [preset, setPreset] = useState('all');
-  const [customRange, setCustomRange] = useState({ startDate: '', endDate: '' });
+  const [pendingCustom, setPendingCustom] = useState({ startDate: '', endDate: '' });
+  const [appliedCustom, setAppliedCustom] = useState({ startDate: '', endDate: '' });
+  const [showPopover, setShowPopover] = useState(false);
   const isMobile = useIsMobile();
+  const popoverRef = useRef(null);
 
-  const filters = useMemo(() => getDateRange(preset, customRange), [preset, customRange]);
+  // Close popover on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
+        setShowPopover(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  function handlePresetClick(key) {
+    setPreset(key);
+    if (key !== 'custom') setShowPopover(false);
+    else setShowPopover(prev => !prev);
+  }
+
+  function handleApply() {
+    setAppliedCustom(pendingCustom);
+    setShowPopover(false);
+  }
+
+  function resetToAllTime() {
+    setPreset('all');
+    setAppliedCustom({ startDate: '', endDate: '' });
+    setPendingCustom({ startDate: '', endDate: '' });
+    setShowPopover(false);
+  }
+
+  const filters = useMemo(() => getDateRange(preset, appliedCustom), [preset, appliedCustom]);
   const { data, loading, error } = useDashboard(filters);
+
+  // Pill date range (Last 7, Last 30, Custom applied only)
+  const pillRange = useMemo(() => {
+    if (preset === 'last7' || preset === 'last30') return getDateRange(preset, {});
+    if (preset === 'custom' && appliedCustom.startDate && appliedCustom.endDate) return appliedCustom;
+    return null;
+  }, [preset, appliedCustom]);
 
   if (loading) return <Loader />;
   if (error) return <ErrorMessage message={error} />;
@@ -74,13 +119,15 @@ export default function Dashboard() {
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header + Date Filter */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
+
+        {/* Preset buttons row */}
         <div className="flex flex-wrap items-center gap-2">
           {PRESETS.map(({ key, label }) => (
             <button
               key={key}
-              onClick={() => setPreset(key)}
+              onClick={() => handlePresetClick(key)}
               className={`px-2.5 py-1.5 text-xs sm:text-sm rounded-lg font-medium transition-colors ${
                 preset === key
                   ? 'bg-terracotta-600 text-white'
@@ -91,24 +138,58 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
-        {preset === 'custom' && (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <Calendar size={16} className="text-gray-400" />
-              <input
-                type="date"
-                value={customRange.startDate}
-                onChange={e => setCustomRange(r => ({ ...r, startDate: e.target.value }))}
-                className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-transparent"
-              />
-              <span className="text-gray-400 text-sm">to</span>
-              <input
-                type="date"
-                value={customRange.endDate}
-                onChange={e => setCustomRange(r => ({ ...r, endDate: e.target.value }))}
-                className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-transparent"
-              />
+
+        {/* Custom date popover */}
+        {showPopover && (
+          <div className="relative" ref={popoverRef}>
+            <div className="absolute left-0 top-1 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-4 w-72">
+              <p className="text-sm font-semibold text-gray-800 mb-3">Select date range</p>
+              <div className="space-y-2.5">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">From</label>
+                  <input
+                    type="date"
+                    value={pendingCustom.startDate}
+                    onChange={e => setPendingCustom(r => ({ ...r, startDate: e.target.value }))}
+                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">To</label>
+                  <input
+                    type="date"
+                    value={pendingCustom.endDate}
+                    min={pendingCustom.startDate || undefined}
+                    onChange={e => setPendingCustom(r => ({ ...r, endDate: e.target.value }))}
+                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleApply}
+                disabled={!pendingCustom.startDate || !pendingCustom.endDate}
+                className="mt-4 w-full py-2 bg-terracotta-600 text-white text-sm font-medium rounded-lg hover:bg-terracotta-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Apply
+              </button>
             </div>
+          </div>
+        )}
+
+        {/* Active date range pill (Last 7, Last 30, Custom applied) */}
+        {pillRange && (
+          <div className={`flex items-center gap-2 ${showPopover ? 'mt-24 sm:mt-20' : ''}`}>
+            <span className="inline-flex items-center gap-1.5 bg-terracotta-50 border border-terracotta-200 text-terracotta-700 text-xs sm:text-sm rounded-full px-3 py-1 font-medium">
+              <Calendar size={13} />
+              {formatPillDate(pillRange.startDate)} → {formatPillDate(pillRange.endDate)}
+              <button
+                onClick={resetToAllTime}
+                className="ml-1 hover:text-terracotta-900 flex items-center"
+                aria-label="Clear date filter"
+              >
+                <X size={13} />
+              </button>
+            </span>
           </div>
         )}
       </div>
