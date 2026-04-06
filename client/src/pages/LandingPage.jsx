@@ -148,14 +148,16 @@ function FeatureCard({ icon: Icon, title, description }) {
 }
 
 /* ─── Browser Mockup ─── */
-function PhoneMockup({ children, className = '' }) {
+function MobileBrowserMockup({ children, className = '' }) {
   return (
-    <div className={`bg-gray-900 rounded-[2.5rem] p-3 shadow-xl ${className}`}>
-      {/* Notch */}
-      <div className="relative bg-white rounded-[2rem] overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-900 rounded-b-2xl z-10" />
-        {children}
+    <div className={`bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden ${className}`}>
+      {/* Safari-style mobile address bar */}
+      <div className="bg-gray-100 border-b border-gray-200 px-3 py-2 flex items-center gap-2">
+        <div className="flex-1 bg-white rounded-md px-2.5 py-1 text-[10px] text-gray-400 text-center truncate border border-gray-200">
+          kleithronix.com/insights
+        </div>
       </div>
+      {children}
     </div>
   );
 }
@@ -256,7 +258,7 @@ export default function LandingPage() {
               <span className="text-terracotta-600">Delight Customers.</span>
             </h1>
             <p className="text-lg text-gray-600 leading-relaxed max-w-lg">
-              A powerful order management system that connects to your Google Sheet. Track orders from Amazon, Flipkart, Meesho, Instagram, and WhatsApp — all in one place.
+              A powerful order management system that connects to your Google Sheet. Track orders from different sources all in one place.
             </p>
             <div className="flex flex-wrap gap-3">
               <button onClick={() => setShowDemo(true)}
@@ -275,9 +277,9 @@ export default function LandingPage() {
               <img src={heroImg} alt="Insights preview" className="w-full" />
             </BrowserMockup>
             {mobileImg && (
-              <PhoneMockup className="absolute -bottom-8 -left-8 w-36 sm:w-44">
+              <MobileBrowserMockup className="absolute -bottom-8 -left-8 w-36 sm:w-44">
                 <img src={mobileImg} alt="Mobile preview" className="w-full" />
-              </PhoneMockup>
+              </MobileBrowserMockup>
             )}
           </div>
         </div>
