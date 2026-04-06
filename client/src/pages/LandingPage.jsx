@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 import heroImg from '../assets/hero.png';
+import dashboardImg from '../assets/dashboard.png';
 
 /* ─── Demo Request Modal ─── */
 function DemoRequestModal({ onClose }) {
@@ -269,7 +270,7 @@ export default function LandingPage() {
             <p className="text-gray-600 max-w-2xl mx-auto">Get real-time visibility into orders, revenue, inventory, and customer metrics — all from a single screen.</p>
           </div>
           <BrowserMockup className="text-left">
-            <img src={heroImg} alt="Full dashboard view" className="w-full" />
+            <img src={dashboardImg} alt="Full dashboard view" className="w-full" />
           </BrowserMockup>
         </div>
       </section>
