@@ -9,6 +9,10 @@ import logo from '../assets/logo.png';
 import heroImg from '../assets/hero.png';
 import dashboardImg from '../assets/dashboard.png';
 
+/* mobile.png — will be added by user; dynamic import so build doesn't break if missing */
+const mobileModules = import.meta.glob('../assets/mobile.png', { eager: true, import: 'default' });
+const mobileImg = Object.values(mobileModules)[0] || null;
+
 /* ─── Demo Request Modal ─── */
 function DemoRequestModal({ onClose }) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', company: '', message: '' });
@@ -144,7 +148,19 @@ function FeatureCard({ icon: Icon, title, description }) {
 }
 
 /* ─── Browser Mockup ─── */
-function BrowserMockup({ children, className = '' }) {
+function PhoneMockup({ children, className = '' }) {
+  return (
+    <div className={`bg-gray-900 rounded-[2.5rem] p-3 shadow-xl ${className}`}>
+      {/* Notch */}
+      <div className="relative bg-white rounded-[2rem] overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-900 rounded-b-2xl z-10" />
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function BrowserMockup({ children, url = 'kleithronix.com/dashboard', className = '' }) {
   return (
     <div className={`bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden ${className}`}>
       {/* Title bar */}
@@ -155,7 +171,7 @@ function BrowserMockup({ children, className = '' }) {
           <div className="w-3 h-3 rounded-full bg-green-400" />
         </div>
         <div className="flex-1 ml-3">
-          <div className="bg-white rounded-md px-3 py-1 text-xs text-gray-400 max-w-xs">kleithronix.com/dashboard</div>
+          <div className="bg-white rounded-md px-3 py-1 text-xs text-gray-400 max-w-xs">{url}</div>
         </div>
       </div>
       {children}
@@ -253,11 +269,16 @@ export default function LandingPage() {
               </Link>
             </div>
           </div>
-          {/* Right — Browser mockup */}
-          <div className="lg:block">
-            <BrowserMockup>
-              <img src={heroImg} alt="Dashboard preview" className="w-full" />
+          {/* Right — Browser + Phone mockups */}
+          <div className="lg:block relative">
+            <BrowserMockup url="kleithronix.com/insights">
+              <img src={heroImg} alt="Insights preview" className="w-full" />
             </BrowserMockup>
+            {mobileImg && (
+              <PhoneMockup className="absolute -bottom-8 -left-8 w-36 sm:w-44">
+                <img src={mobileImg} alt="Mobile preview" className="w-full" />
+              </PhoneMockup>
+            )}
           </div>
         </div>
       </section>
