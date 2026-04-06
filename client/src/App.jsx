@@ -15,6 +15,7 @@ import ArchivedCustomers from './pages/ArchivedCustomers';
 import InventoryPage from './pages/Inventory';
 import ProductDetail from './pages/ProductDetail';
 import ArchivedInventory from './pages/ArchivedInventory';
+import LandingPage from './pages/LandingPage';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -62,10 +63,11 @@ export default function App() {
       <BrowserRouter>
         <AuthProvider>
           <Routes>
+            <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/orders" element={<Orders />} />
                 <Route path="/orders/:rowIndex" element={<OrderDetail />} />
                 <Route path="/inventory" element={<InventoryPage />} />

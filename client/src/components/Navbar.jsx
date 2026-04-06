@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/orders', label: 'Orders', icon: ShoppingBag },
   { path: '/inventory', label: 'Inventory', icon: Package },
   { path: '/customers', label: 'Customers', icon: Users },
@@ -48,7 +48,7 @@ export default function Navbar() {
     <nav ref={navRef} className="bg-brand-black border-b border-gray-800 sticky top-0 z-50">
       {/* Top bar */}
       <div className="flex items-center justify-between max-w-7xl mx-auto px-4 sm:px-6 py-3">
-        <Link to="/">
+        <Link to="/dashboard">
           <img src={logo} alt="Logo" className="h-7 sm:h-8" />
         </Link>
 
