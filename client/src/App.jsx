@@ -15,6 +15,7 @@ import ArchivedCustomers from './pages/ArchivedCustomers';
 import InventoryPage from './pages/Inventory';
 import ProductDetail from './pages/ProductDetail';
 import ArchivedInventory from './pages/ArchivedInventory';
+import SettingsPage from './pages/Settings';
 import LandingPage from './pages/LandingPage';
 
 class ErrorBoundary extends Component {
@@ -78,6 +79,7 @@ export default function App() {
                 <Route path="/customers/:phone" element={<CustomerDetail />} />
                 <Route path="/insights" element={<Insights />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/settings" element={<SettingsPage />} />
               </Route>
             </Route>
           </Routes>

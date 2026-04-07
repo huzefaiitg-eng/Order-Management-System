@@ -39,8 +39,6 @@ export const STATUS_COLORS = {
 
 export const CHART_COLORS = ['#C8956C', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4'];
 
-export const PRODUCT_CATEGORIES = ['Men', 'Women', 'Kids'];
-
 export const STOCK_COLORS = {
   'Out of Stock': 'bg-red-100 text-red-800',
   'Low Stock': 'bg-amber-100 text-amber-800',

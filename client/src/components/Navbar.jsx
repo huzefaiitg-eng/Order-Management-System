@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Lightbulb, Users, Package, User, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Lightbulb, Users, Package, User, LogOut, Menu, X, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
 
@@ -92,6 +92,14 @@ export default function Navbar() {
                   <User size={16} />
                   Profile
                 </Link>
+                <Link
+                  to="/settings"
+                  onClick={() => setAvatarOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Settings size={16} />
+                  Settings
+                </Link>
                 <button
                   onClick={logout}
                   className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
@@ -126,6 +134,14 @@ export default function Navbar() {
                 >
                   <User size={16} />
                   Profile
+                </Link>
+                <Link
+                  to="/settings"
+                  onClick={() => { setAvatarOpen(false); setMobileOpen(false); }}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Settings size={16} />
+                  Settings
                 </Link>
                 <button
                   onClick={logout}

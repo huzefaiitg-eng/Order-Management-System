@@ -6,10 +6,9 @@ import StatusSelect from '../components/StatusSelect';
 import StatusBadge from '../components/StatusBadge';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
-import { formatCurrency, ORDER_SOURCES, ORDER_STATUSES, PAYMENT_MODES, PRODUCT_CATEGORIES } from '../utils/formatters';
+import { formatCurrency, ORDER_SOURCES, ORDER_STATUSES, PAYMENT_MODES } from '../utils/formatters';
 import { fetchCustomers, fetchInventory, addOrder, addCustomer, addProduct } from '../services/api';
-
-const SUB_CATEGORIES = ['Casual Wear', 'Office Wear', 'Party Wear', 'Sports', 'Ethnic', 'Daily Wear'];
+import { useCategories } from '../hooks/useCategories';
 
 function SearchableDropdown({ label, placeholder, items, displayFn, onSelect, onAddNew, addNewLabel }) {
   const [search, setSearch] = useState('');
@@ -229,13 +228,13 @@ function AddOrderModal({ onClose, onAdded }) {
               </div>
               <input type="text" value={newProduct.productName} onChange={e => setNewProduct({ ...newProduct, productName: e.target.value })}
                 className={inputClass} placeholder="Product name *" />
-              <select value={newProduct.category} onChange={e => setNewProduct({ ...newProduct, category: e.target.value })} className={inputClass}>
+              <select value={newProduct.category} onChange={e => setNewProduct({ ...newProduct, category: e.target.value, subCategory: '' })} className={inputClass}>
                 <option value="">Category *</option>
-                {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <select value={newProduct.subCategory} onChange={e => setNewProduct({ ...newProduct, subCategory: e.target.value })} className={inputClass}>
                 <option value="">Sub Category</option>
-                {SUB_CATEGORIES.map(s => <option key={s} value={s}>{s}</option>)}
+                {(categorySubCategories[newProduct.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
               </select>
               <input type="number" value={newProduct.productCost} onChange={e => setNewProduct({ ...newProduct, productCost: e.target.value })}
                 className={inputClass} placeholder="Cost price *" />
@@ -291,6 +290,7 @@ export default function Orders() {
   const [filters, setFilters] = useState({});
   const [search, setSearch] = useState('');
   const { orders, loading, error, refresh, updateStatus } = useOrders(filters);
+  const { categories, categorySubCategories } = useCategories();
   const [showAddModal, setShowAddModal] = useState(false);
 
   const [sortField, setSortField] = useState(null);

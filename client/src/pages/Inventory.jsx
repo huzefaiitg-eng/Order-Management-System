@@ -3,15 +3,14 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee, Plus, X, Archive } from 'lucide-react';
 import { useInventory } from '../hooks/useInventory';
 import { fetchInventorySummary, addProduct, archiveProduct } from '../services/api';
-import { formatCurrency, PRODUCT_CATEGORIES } from '../utils/formatters';
+import { formatCurrency } from '../utils/formatters';
+import { useCategories } from '../hooks/useCategories';
 import StockBadge from '../components/StockBadge';
 import KpiCard from '../components/KpiCard';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 
-const SUB_CATEGORIES = ['Casual Wear', 'Office Wear', 'Party Wear', 'Sports', 'Ethnic', 'Daily Wear'];
-
-function AddProductModal({ onClose, onAdded }) {
+function AddProductModal({ onClose, onAdded, categories, categorySubCategories }) {
   const [form, setForm] = useState({
     productName: '', category: '', subCategory: '', productCost: '', instockQuantity: '', productDescription: '',
   });
@@ -58,10 +57,10 @@ function AddProductModal({ onClose, onAdded }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
+              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value, subCategory: '' })}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
                 <option value="">Select</option>
-                {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
@@ -69,7 +68,7 @@ function AddProductModal({ onClose, onAdded }) {
               <select value={form.subCategory} onChange={e => setForm({ ...form, subCategory: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
                 <option value="">Select</option>
-                {SUB_CATEGORIES.map(s => <option key={s} value={s}>{s}</option>)}
+                {(categorySubCategories[form.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
@@ -112,6 +111,7 @@ export default function Inventory() {
   const [subCategory, setSubCategory] = useState('');
   const [filters, setFilters] = useState({});
   const { products, loading, error, refresh } = useInventory(filters);
+  const { categories, categorySubCategories } = useCategories();
   const [summary, setSummary] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [archiving, setArchiving] = useState(null);
@@ -250,7 +250,7 @@ export default function Inventory() {
           className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500"
         >
           <option value="">All Categories</option>
-          {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select
           value={subCategory}
@@ -258,7 +258,7 @@ export default function Inventory() {
           className="px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500"
         >
           <option value="">All Sub-Categories</option>
-          {SUB_CATEGORIES.map(s => <option key={s} value={s}>{s}</option>)}
+          {(category ? (categorySubCategories[category] || []) : [...new Set(Object.values(categorySubCategories).flat())]).map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
@@ -356,7 +356,7 @@ export default function Inventory() {
         </div>
       )}
 
-      {showAddModal && <AddProductModal onClose={() => setShowAddModal(false)} onAdded={handleRefresh} />}
+      {showAddModal && <AddProductModal onClose={() => setShowAddModal(false)} onAdded={handleRefresh} categories={categories} categorySubCategories={categorySubCategories} />}
     </div>
   );
 }

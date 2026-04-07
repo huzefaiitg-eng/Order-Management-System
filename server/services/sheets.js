@@ -524,6 +524,204 @@ async function deleteProduct(sheetId, articleId) {
   return { deleted: true, articleId };
 }
 
+// ── Settings (Categories) ──────────────────────────────────
+
+const DEFAULT_DEMO_CATEGORIES = [
+  ['Men', 'Casual Wear'], ['Men', 'Office Wear'], ['Men', 'Party Wear'],
+  ['Men', 'Sports'], ['Men', 'Ethnic'], ['Men', 'Daily Wear'],
+  ['Women', 'Casual Wear'], ['Women', 'Office Wear'], ['Women', 'Party Wear'],
+  ['Women', 'Sports'], ['Women', 'Ethnic'], ['Women', 'Daily Wear'],
+  ['Kids', 'Casual Wear'], ['Kids', 'Office Wear'], ['Kids', 'Party Wear'],
+  ['Kids', 'Sports'], ['Kids', 'Ethnic'], ['Kids', 'Daily Wear'],
+];
+
+const DEFAULT_GENERIC_CATEGORIES = [
+  ['Category 1', 'Sub Category 1'], ['Category 1', 'Sub Category 2'],
+  ['Category 2', 'Sub Category 1'], ['Category 2', 'Sub Category 2'],
+  ['Category 3', 'Sub Category 1'], ['Category 3', 'Sub Category 2'],
+];
+
+async function ensureSettingsTab(sheetId) {
+  const names = await getSheetNames(sheetId);
+  if (names.includes('Settings')) return;
+
+  const sheets = await getClient();
+
+  // Create the tab
+  try {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: sheetId,
+      requestBody: {
+        requests: [{ addSheet: { properties: { title: 'Settings' } } }],
+      },
+    });
+  } catch (err) {
+    // Tab may already exist due to race condition
+    if (err.message && err.message.includes('already exists')) return;
+    throw err;
+  }
+
+  // Write header
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: 'Settings!A1:B1',
+    valueInputOption: 'RAW',
+    requestBody: { values: [['Category', 'SubCategory']] },
+  });
+
+  // Determine defaults based on existing inventory data
+  let defaults = DEFAULT_GENERIC_CATEGORIES;
+  try {
+    const inventory = await getAllInventory(sheetId);
+    const cats = new Set(inventory.map(p => p.category));
+    if (cats.has('Men') || cats.has('Women') || cats.has('Kids')) {
+      defaults = DEFAULT_DEMO_CATEGORIES;
+    }
+  } catch { /* inventory tab might not exist yet */ }
+
+  // Populate defaults
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: sheetId,
+    range: 'Settings!A:B',
+    valueInputOption: 'RAW',
+    requestBody: { values: defaults },
+  });
+}
+
+async function getCategories(sheetId) {
+  await ensureSettingsTab(sheetId);
+
+  const sheets = await getClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: 'Settings!A2:B',
+  });
+
+  const rows = response.data.values || [];
+  const categorySubCategories = {};
+
+  for (const row of rows) {
+    const cat = (row[0] || '').trim();
+    const sub = (row[1] || '').trim();
+    if (!cat) continue;
+    if (!categorySubCategories[cat]) categorySubCategories[cat] = [];
+    if (sub && !categorySubCategories[cat].includes(sub)) {
+      categorySubCategories[cat].push(sub);
+    }
+  }
+
+  return {
+    categories: Object.keys(categorySubCategories),
+    categorySubCategories,
+  };
+}
+
+async function addCategorySetting(sheetId, { category, subCategory }) {
+  await ensureSettingsTab(sheetId);
+
+  // Check for duplicate
+  const existing = await getCategories(sheetId);
+  const subs = existing.categorySubCategories[category] || [];
+  if (subs.includes(subCategory)) {
+    throw new Error(`"${subCategory}" already exists under "${category}"`);
+  }
+
+  const sheets = await getClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: sheetId,
+    range: 'Settings!A:B',
+    valueInputOption: 'RAW',
+    requestBody: { values: [[category, subCategory]] },
+  });
+
+  return { category, subCategory };
+}
+
+async function deleteCategorySetting(sheetId, { category, subCategory }) {
+  await ensureSettingsTab(sheetId);
+
+  const sheets = await getClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: 'Settings!A2:B',
+  });
+
+  const rows = response.data.values || [];
+  let targetRowIndex = null;
+  for (let i = 0; i < rows.length; i++) {
+    if ((rows[i][0] || '').trim() === category && (rows[i][1] || '').trim() === subCategory) {
+      targetRowIndex = i + 2; // +2 for header row and 0-index
+      break;
+    }
+  }
+
+  if (!targetRowIndex) throw new Error('Category setting not found');
+
+  const tabSheetId = await getSheetId(sheetId, 'Settings');
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: sheetId,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: tabSheetId,
+            dimension: 'ROWS',
+            startIndex: targetRowIndex - 1,
+            endIndex: targetRowIndex,
+          },
+        },
+      }],
+    },
+  });
+
+  return { deleted: true, category, subCategory };
+}
+
+async function deleteCategoryAll(sheetId, category) {
+  await ensureSettingsTab(sheetId);
+
+  const sheets = await getClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: 'Settings!A2:B',
+  });
+
+  const rows = response.data.values || [];
+  // Collect row indices (1-based sheet rows) that match, in reverse order
+  const rowIndicesToDelete = [];
+  for (let i = 0; i < rows.length; i++) {
+    if ((rows[i][0] || '').trim() === category) {
+      rowIndicesToDelete.push(i + 2); // +2 for header + 0-index
+    }
+  }
+
+  if (rowIndicesToDelete.length === 0) throw new Error('Category not found');
+
+  const tabSheetId = await getSheetId(sheetId, 'Settings');
+
+  // Delete from bottom to top to preserve indices
+  rowIndicesToDelete.reverse();
+  for (const rowIdx of rowIndicesToDelete) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: sheetId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: tabSheetId,
+              dimension: 'ROWS',
+              startIndex: rowIdx - 1,
+              endIndex: rowIdx,
+            },
+          },
+        }],
+      },
+    });
+  }
+
+  return { deleted: true, category };
+}
+
 module.exports = {
   getClient,
   getAllOrders, updateOrderStatus, addOrder, getOrderStatus,
@@ -533,4 +731,5 @@ module.exports = {
   archiveProduct, unarchiveProduct, deleteProduct,
   addAuditEntry, getAuditHistory,
   getSheetNames,
+  getCategories, addCategorySetting, deleteCategorySetting, deleteCategoryAll,
 };

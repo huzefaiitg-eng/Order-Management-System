@@ -194,3 +194,29 @@ export function unarchiveProduct(articleId) {
 export function deleteProduct(articleId) {
   return request(`/inventory/${encodeURIComponent(articleId)}`, { method: 'DELETE' });
 }
+
+// Settings — Categories
+export function fetchCategories() {
+  return request('/settings/categories');
+}
+
+export function addCategorySettingApi(data) {
+  return request('/settings/categories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteCategorySettingApi(data) {
+  return request('/settings/categories', {
+    method: 'DELETE',
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteCategoryAllApi(category) {
+  return request('/settings/categories/category', {
+    method: 'DELETE',
+    body: JSON.stringify({ category }),
+  });
+}

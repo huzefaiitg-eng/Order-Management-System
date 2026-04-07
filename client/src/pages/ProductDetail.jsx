@@ -2,17 +2,17 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Package, ShoppingBag, IndianRupee, RotateCcw, TrendingUp, Pencil, X, Check, Archive } from 'lucide-react';
 import { fetchProductByArticleId, updateProduct, archiveProduct } from '../services/api';
-import { formatCurrency, formatPercent, PRODUCT_CATEGORIES } from '../utils/formatters';
+import { formatCurrency, formatPercent } from '../utils/formatters';
+import { useCategories } from '../hooks/useCategories';
 import StockBadge from '../components/StockBadge';
 import StatusBadge from '../components/StatusBadge';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 
-const SUB_CATEGORIES = ['Casual Wear', 'Office Wear', 'Party Wear', 'Sports', 'Ethnic', 'Daily Wear'];
-
 export default function ProductDetail() {
   const { articleId } = useParams();
   const navigate = useNavigate();
+  const { categories, categorySubCategories } = useCategories();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -113,16 +113,17 @@ export default function ProductDetail() {
                 <div className="flex gap-3">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Category</label>
-                    <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })}
+                    <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value, subCategory: '' })}
                       className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
-                      {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Sub Category</label>
                     <select value={editForm.subCategory} onChange={e => setEditForm({ ...editForm, subCategory: e.target.value })}
                       className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
-                      {SUB_CATEGORIES.map(s => <option key={s} value={s}>{s}</option>)}
+                      <option value="">Select</option>
+                      {(categorySubCategories[editForm.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                 </div>
