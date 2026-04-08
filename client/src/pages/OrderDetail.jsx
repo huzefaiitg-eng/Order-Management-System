@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Phone, MapPin, Package, CreditCard, Clock } from 'lucide-react';
+import { ArrowLeft, Phone, MapPin, Package, CreditCard, Clock, FileText } from 'lucide-react';
 import { fetchOrders, updateOrderStatus, fetchOrderAudit } from '../services/api';
 import StatusBadge from '../components/StatusBadge';
 import StatusSelect from '../components/StatusSelect';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 import { formatCurrency, ORDER_STATUSES, STATUS_COLORS } from '../utils/formatters';
+import BillModal from '../components/BillModal';
 
 const STATUS_FLOW = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered'];
 
@@ -17,6 +18,7 @@ export default function OrderDetail() {
   const [auditHistory, setAuditHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showBill, setShowBill] = useState(false);
 
   const loadData = async () => {
     try {
@@ -70,35 +72,66 @@ export default function OrderDetail() {
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 space-y-6">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">
-                {order.articleId ? (
-                  <Link to={`/inventory/${encodeURIComponent(order.articleId)}`} className="hover:text-terracotta-600">
-                    {order.productOrdered}
-                  </Link>
-                ) : order.productOrdered}
-              </h1>
-              {order.productDescription && (
-                <p className="text-sm text-gray-500 mt-0.5">{order.productDescription}</p>
+              {order.productLines?.length > 1 ? (
+                <>
+                  <h1 className="text-xl font-bold text-gray-900">Multi-Product Order</h1>
+                  <div className="mt-2 space-y-2">
+                    {order.productLines.map((line, i) => (
+                      <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                        <div>
+                          <span className="text-sm font-medium text-gray-900">
+                            {line.articleId ? (
+                              <Link to={`/inventory/${encodeURIComponent(line.articleId)}`} className="hover:text-terracotta-600">{line.productName}</Link>
+                            ) : line.productName}
+                          </span>
+                          {line.category && <span className="ml-2 text-xs text-gray-500">{line.category}</span>}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          &times;{line.quantity} &middot; {formatCurrency(line.unitCost)}/unit &middot; <span className="font-medium">{formatCurrency(line.lineTotal)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-xl font-bold text-gray-900">
+                    {order.articleId ? (
+                      <Link to={`/inventory/${encodeURIComponent(order.articleId)}`} className="hover:text-terracotta-600">
+                        {order.productOrdered}
+                      </Link>
+                    ) : order.productOrdered}
+                  </h1>
+                  {order.productDescription && (
+                    <p className="text-sm text-gray-500 mt-0.5">{order.productDescription}</p>
+                  )}
+                  {(order.category || order.subCategory) && (
+                    <div className="flex gap-2 mt-2">
+                      {order.category && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-terracotta-100 text-terracotta-800">
+                          {order.category}
+                        </span>
+                      )}
+                      {order.subCategory && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          {order.subCategory}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-sm text-gray-500">Order from {order.orderFrom} on {order.orderDate}</span>
+                {order.orderNumber && <span className="text-xs text-gray-400">({order.orderNumber})</span>}
               </div>
-              {(order.category || order.subCategory) && (
-                <div className="flex gap-2 mt-2">
-                  {order.category && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-terracotta-100 text-terracotta-800">
-                      {order.category}
-                    </span>
-                  )}
-                  {order.subCategory && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                      {order.subCategory}
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
-            <StatusSelect currentStatus={order.orderStatus} onUpdate={handleStatusUpdate} />
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowBill(true)} className="p-2 text-gray-400 hover:text-terracotta-600 hover:bg-terracotta-50 rounded-lg transition-colors" title="Generate Bill">
+                <FileText size={18} />
+              </button>
+              <StatusSelect currentStatus={order.orderStatus} onUpdate={handleStatusUpdate} />
+            </div>
           </div>
 
           {/* Status Timeline */}
@@ -141,7 +174,7 @@ export default function OrderDetail() {
             <div className="flex items-center gap-3">
               <Package size={18} className="text-gray-400" />
               <div>
-                <p className="text-xs text-gray-500">Product Cost</p>
+                <p className="text-xs text-gray-500">{order.productLines?.length > 1 ? 'Total Cost' : 'Product Cost'}</p>
                 <p className="text-sm font-medium text-gray-900">{formatCurrency(order.productCost)}</p>
               </div>
             </div>
@@ -237,7 +270,10 @@ export default function OrderDetail() {
                     to={`/orders/${o.rowIndex}`}
                     className="block p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors"
                   >
-                    <p className="text-sm font-medium text-gray-900">{o.productOrdered}</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {o.productLines?.[0]?.productName || o.productOrdered}
+                      {o.productLines?.length > 1 && <span className="text-xs text-terracotta-600 ml-1">(+{o.productLines.length - 1} more)</span>}
+                    </p>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-xs text-gray-500">{o.orderDate}</span>
                       <StatusBadge status={o.orderStatus} />
@@ -249,6 +285,8 @@ export default function OrderDetail() {
           )}
         </div>
       </div>
+
+      {showBill && <BillModal order={order} onClose={() => setShowBill(false)} />}
     </div>
   );
 }

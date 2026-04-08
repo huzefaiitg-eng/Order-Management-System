@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, RefreshCw, Eye, Plus, X, ChevronDown, SlidersHorizontal, MoreVertical } from 'lucide-react';
+import { Search, RefreshCw, Eye, Plus, X, ChevronDown, SlidersHorizontal, MoreVertical, CheckCircle, FileText, Trash2 } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 import StatusSelect from '../components/StatusSelect';
 import StatusBadge from '../components/StatusBadge';
@@ -9,6 +9,8 @@ import ErrorMessage from '../components/ErrorMessage';
 import { formatCurrency, ORDER_SOURCES, ORDER_STATUSES, PAYMENT_MODES } from '../utils/formatters';
 import { fetchCustomers, fetchInventory, addOrder, addCustomer, addProduct } from '../services/api';
 import { useCategories } from '../hooks/useCategories';
+import { useAuth } from '../context/AuthContext';
+import BillModal from '../components/BillModal';
 
 const BATCH_SIZE = 25;
 
@@ -55,7 +57,7 @@ function SearchableDropdown({ label, placeholder, items, displayFn, onSelect, on
 }
 
 /* ─── CardActionMenu (mobile ⋮ menu) ─── */
-function CardActionMenu({ order, onStatusChange }) {
+function CardActionMenu({ order, onStatusChange, onGenerateBill }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
@@ -78,6 +80,10 @@ function CardActionMenu({ order, onStatusChange }) {
             className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2">
             <Eye size={14} /> View Details
           </button>
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateBill(order); setOpen(false); }}
+            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2">
+            <FileText size={14} /> Generate Bill
+          </button>
           <div className="border-t border-gray-100 my-1" />
           <p className="px-3 py-1 text-xs text-gray-400 font-medium">Change Status</p>
           {ORDER_STATUSES.map(s => (
@@ -93,18 +99,22 @@ function CardActionMenu({ order, onStatusChange }) {
 }
 
 /* ─── AddOrderModal ─── */
-function AddOrderModal({ onClose, onAdded }) {
+function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
+  const navigate = useNavigate();
   const { categories, categorySubCategories } = useCategories();
+  const [modalStep, setModalStep] = useState('form'); // 'form' | 'confirmation'
+  const [createdOrder, setCreatedOrder] = useState(null);
   const [form, setForm] = useState({
     orderDate: new Date().toLocaleDateString('en-GB'), orderFrom: '', customerName: '', customerPhone: '',
-    customerAddress: '', productOrdered: '', productCost: '', modeOfPayment: '', quantityOrdered: 1, pricePaid: '',
+    customerAddress: '', modeOfPayment: '', pricePaid: '',
   });
+  const [productLines, setProductLines] = useState([{ productName: '', unitCost: 0, quantity: 1 }]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [addingNewCustomer, setAddingNewCustomer] = useState(false);
-  const [addingNewProduct, setAddingNewProduct] = useState(false);
+  const [addingNewProductIdx, setAddingNewProductIdx] = useState(-1);
   const [newCustomer, setNewCustomer] = useState({ customerName: '', customerPhone: '', customerAddress: '' });
   const [newProduct, setNewProduct] = useState({ productName: '', category: '', subCategory: '', productCost: '', instockQuantity: '' });
   const [savingCustomer, setSavingCustomer] = useState(false);
@@ -116,7 +126,16 @@ function AddOrderModal({ onClose, onAdded }) {
   }, []);
 
   const handleCustomerSelect = (c) => setForm(f => ({ ...f, customerName: c.customerName, customerPhone: c.customerPhone, customerAddress: c.customerAddress }));
-  const handleProductSelect = (p) => setForm(f => ({ ...f, productOrdered: p.productName, productCost: p.productCost }));
+
+  const handleProductSelectForLine = (idx, p) => {
+    setProductLines(prev => prev.map((line, i) => i === idx ? { ...line, productName: p.productName, unitCost: p.productCost || 0 } : line));
+  };
+
+  const addProductLine = () => setProductLines(prev => [...prev, { productName: '', unitCost: 0, quantity: 1 }]);
+  const removeProductLine = (idx) => setProductLines(prev => prev.filter((_, i) => i !== idx));
+  const updateProductLine = (idx, field, value) => setProductLines(prev => prev.map((line, i) => i === idx ? { ...line, [field]: value } : line));
+
+  const totalCost = productLines.reduce((sum, l) => sum + (l.unitCost || 0) * (l.quantity || 1), 0);
 
   const handleAddNewCustomer = async () => {
     if (!newCustomer.customerName || !newCustomer.customerPhone) { setError('Customer name and phone are required'); return; }
@@ -129,27 +148,80 @@ function AddOrderModal({ onClose, onAdded }) {
     } catch (err) { setError(err.message); } finally { setSavingCustomer(false); }
   };
 
-  const handleAddNewProduct = async () => {
+  const handleAddNewProduct = async (lineIdx) => {
     if (!newProduct.productName || !newProduct.category || !newProduct.productCost) { setError('Product name, category, and cost are required'); return; }
     setSavingProduct(true);
     try {
       const created = await addProduct({ ...newProduct, instockQuantity: parseInt(newProduct.instockQuantity) || 0 });
       setProducts(prev => [...prev, created]);
-      setForm(f => ({ ...f, productOrdered: created.productName, productCost: created.productCost }));
-      setAddingNewProduct(false); setNewProduct({ productName: '', category: '', subCategory: '', productCost: '', instockQuantity: '' }); setError('');
+      handleProductSelectForLine(lineIdx, created);
+      setAddingNewProductIdx(-1); setNewProduct({ productName: '', category: '', subCategory: '', productCost: '', instockQuantity: '' }); setError('');
     } catch (err) { setError(err.message); } finally { setSavingProduct(false); }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.orderFrom || !form.customerName || !form.customerPhone || !form.productOrdered || !form.modeOfPayment) {
-      setError('Please fill in all required fields'); return;
+    const validLines = productLines.filter(l => l.productName);
+    if (!form.orderFrom || !form.customerName || !form.customerPhone || validLines.length === 0 || !form.modeOfPayment) {
+      setError('Please fill in all required fields and add at least one product'); return;
     }
     setSaving(true); setError('');
-    try { await addOrder(form); onAdded(); onClose(); } catch (err) { setError(err.message); } finally { setSaving(false); }
+    try {
+      const result = await addOrder({
+        ...form,
+        productLines: validLines,
+        pricePaid: parseFloat(form.pricePaid) || 0,
+      });
+      setCreatedOrder(result);
+      onAdded();
+      setModalStep('confirmation');
+    } catch (err) { setError(err.message); } finally { setSaving(false); }
   };
 
   const inputClass = "w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500";
+
+  if (modalStep === 'confirmation' && createdOrder) {
+    const profit = (createdOrder.pricePaid || 0) - (createdOrder.productCost || 0);
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+        <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="text-center mb-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-green-100 rounded-full mb-3">
+              <CheckCircle size={24} className="text-green-600" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900">Order Created Successfully</h2>
+            <p className="text-sm text-gray-500 mt-1">{createdOrder.orderNumber}</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4 space-y-3 text-sm">
+            <div className="flex justify-between"><span className="text-gray-500">Customer</span><span className="font-medium text-gray-900">{createdOrder.customerName}</span></div>
+            <div className="border-t border-gray-200 pt-2">
+              <span className="text-gray-500 block mb-1">Products</span>
+              {(createdOrder.productLines || []).map((line, i) => (
+                <div key={i} className="flex justify-between text-gray-700">
+                  <span>{line.productName} &times;{line.quantity}</span>
+                  <span>{formatCurrency(line.lineTotal)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-gray-200 pt-2 flex justify-between"><span className="text-gray-500">Price Paid</span><span className="font-semibold text-gray-900">{formatCurrency(createdOrder.pricePaid)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Profit</span><span className={`font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(profit)}</span></div>
+            <div className="flex justify-between items-center"><span className="text-gray-500">Status</span><StatusBadge status="Pending" /></div>
+          </div>
+          <div className="flex flex-col gap-2 mt-5">
+            <button onClick={() => navigate(`/orders/${createdOrder.rowIndex}`)}
+              className="w-full px-4 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 flex items-center justify-center gap-2">
+              <Eye size={16} /> View Order Details
+            </button>
+            <button onClick={() => { onGenerateBill(createdOrder); onClose(); }}
+              className="w-full px-4 py-2 text-sm border border-terracotta-300 text-terracotta-700 rounded-lg hover:bg-terracotta-50 flex items-center justify-center gap-2">
+              <FileText size={16} /> Generate Bill
+            </button>
+            <button onClick={onClose} className="w-full px-4 py-2 text-sm text-gray-500 hover:text-gray-700">Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
@@ -194,35 +266,68 @@ function AddOrderModal({ onClose, onAdded }) {
           )}
           {form.customerName && !addingNewCustomer && <p className="text-xs text-gray-500 -mt-2">Selected: {form.customerName} ({form.customerPhone})</p>}
 
-          {/* Product */}
-          {!addingNewProduct ? (
-            <SearchableDropdown label="Product *" placeholder="Search by name or article ID..." items={products}
-              displayFn={p => `${p.productName} (${p.articleId})`} onSelect={handleProductSelect}
-              onAddNew={() => setAddingNewProduct(true)} addNewLabel="Add new product" />
-          ) : (
-            <div className="border border-terracotta-200 rounded-lg p-3 space-y-3 bg-terracotta-50/30">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-terracotta-700">New Product</span>
-                <button type="button" onClick={() => setAddingNewProduct(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
-              </div>
-              <input type="text" value={newProduct.productName} onChange={e => setNewProduct({ ...newProduct, productName: e.target.value })} className={inputClass} placeholder="Product name *" />
-              <select value={newProduct.category} onChange={e => setNewProduct({ ...newProduct, category: e.target.value, subCategory: '' })} className={inputClass}>
-                <option value="">Category *</option>
-                {categories.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={newProduct.subCategory} onChange={e => setNewProduct({ ...newProduct, subCategory: e.target.value })} className={inputClass}>
-                <option value="">Sub Category</option>
-                {(categorySubCategories[newProduct.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <input type="number" value={newProduct.productCost} onChange={e => setNewProduct({ ...newProduct, productCost: e.target.value })} className={inputClass} placeholder="Cost price *" />
-              <input type="number" value={newProduct.instockQuantity} onChange={e => setNewProduct({ ...newProduct, instockQuantity: e.target.value })} className={inputClass} placeholder="In-stock quantity" />
-              <button type="button" onClick={handleAddNewProduct} disabled={savingProduct}
-                className="w-full px-3 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
-                {savingProduct ? 'Creating...' : 'Create Product'}
-              </button>
+          {/* Product Lines */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Products *</label>
+            <div className="space-y-3">
+              {productLines.map((line, idx) => (
+                <div key={idx} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50/50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500">Product {idx + 1}</span>
+                    {productLines.length > 1 && (
+                      <button type="button" onClick={() => removeProductLine(idx)} className="text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+                    )}
+                  </div>
+                  {addingNewProductIdx !== idx ? (
+                    <>
+                      <SearchableDropdown label="" placeholder="Search product..." items={products}
+                        displayFn={p => `${p.productName} (${p.articleId})`}
+                        onSelect={(p) => handleProductSelectForLine(idx, p)}
+                        onAddNew={() => setAddingNewProductIdx(idx)} addNewLabel="Add new product" />
+                      {line.productName && <p className="text-xs text-gray-500">Selected: {line.productName} (Cost: ₹{line.unitCost})</p>}
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-500 mb-1">Qty</label>
+                          <input type="number" min="1" value={line.quantity} onChange={e => updateProductLine(idx, 'quantity', parseInt(e.target.value) || 1)} className={inputClass} />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-500 mb-1">Unit Cost</label>
+                          <input type="number" value={line.unitCost} onChange={e => updateProductLine(idx, 'unitCost', parseFloat(e.target.value) || 0)} className={inputClass} />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="border border-terracotta-200 rounded-lg p-3 space-y-3 bg-terracotta-50/30">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-terracotta-700">New Product</span>
+                        <button type="button" onClick={() => setAddingNewProductIdx(-1)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+                      </div>
+                      <input type="text" value={newProduct.productName} onChange={e => setNewProduct({ ...newProduct, productName: e.target.value })} className={inputClass} placeholder="Product name *" />
+                      <select value={newProduct.category} onChange={e => setNewProduct({ ...newProduct, category: e.target.value, subCategory: '' })} className={inputClass}>
+                        <option value="">Category *</option>
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <select value={newProduct.subCategory} onChange={e => setNewProduct({ ...newProduct, subCategory: e.target.value })} className={inputClass}>
+                        <option value="">Sub Category</option>
+                        {(categorySubCategories[newProduct.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <input type="number" value={newProduct.productCost} onChange={e => setNewProduct({ ...newProduct, productCost: e.target.value })} className={inputClass} placeholder="Cost price *" />
+                      <input type="number" value={newProduct.instockQuantity} onChange={e => setNewProduct({ ...newProduct, instockQuantity: e.target.value })} className={inputClass} placeholder="In-stock quantity" />
+                      <button type="button" onClick={() => handleAddNewProduct(idx)} disabled={savingProduct}
+                        className="w-full px-3 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
+                        {savingProduct ? 'Creating...' : 'Create Product'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
-          {form.productOrdered && !addingNewProduct && <p className="text-xs text-gray-500 -mt-2">Selected: {form.productOrdered} (Cost: ₹{form.productCost})</p>}
+            <button type="button" onClick={addProductLine}
+              className="mt-2 flex items-center gap-1.5 text-sm text-terracotta-600 hover:text-terracotta-700 font-medium">
+              <Plus size={14} /> Add Another Product
+            </button>
+            <div className="mt-2 text-xs text-gray-500">Total Cost: <span className="font-medium text-gray-700">{formatCurrency(totalCost)}</span></div>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Payment Mode *</label>
@@ -230,10 +335,6 @@ function AddOrderModal({ onClose, onAdded }) {
               <option value="">Select payment mode</option>
               {PAYMENT_MODES.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-            <input type="number" min="1" value={form.quantityOrdered} onChange={e => setForm({ ...form, quantityOrdered: parseInt(e.target.value) || 1 })} className={inputClass} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Price Paid</label>
@@ -260,8 +361,9 @@ export default function Orders() {
   const [showAddModal, setShowAddModal] = useState(false);
 
   // Sorting
-  const [sortField, setSortField] = useState(null);
-  const [sortDir, setSortDir] = useState('asc');
+  const [sortField, setSortField] = useState('orderDate');
+  const [sortDir, setSortDir] = useState('desc');
+  const [billOrder, setBillOrder] = useState(null);
 
   // Filter flap state
   const [filterOpen, setFilterOpen] = useState(false);
@@ -336,8 +438,12 @@ export default function Orders() {
     if (sortField) {
       list.sort((a, b) => {
         let aVal = a[sortField], bVal = b[sortField];
-        if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-        if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+        if (sortField === 'orderDate') {
+          const parse = s => { const [d,m,y] = (s||'').split('/'); return new Date(y, m-1, d) || new Date(0); };
+          aVal = parse(aVal); bVal = parse(bVal);
+        } else if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase(); bVal = (bVal || '').toLowerCase();
+        }
         if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
         if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
         return 0;
@@ -455,14 +561,20 @@ export default function Orders() {
                         <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-medium">{order.orderFrom}</span>
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-900">{order.customerName}</td>
-                      <td className="px-4 py-3 text-gray-600">{order.productOrdered}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {order.productLines?.[0]?.productName || order.productOrdered}
+                        {order.productLines?.length > 1 && <span className="ml-1 text-xs text-terracotta-600 font-medium">(+{order.productLines.length - 1} more)</span>}
+                      </td>
                       <td className="px-4 py-3 text-center text-gray-600">{order.quantityOrdered}</td>
                       <td className="px-4 py-3 text-gray-600">{order.modeOfPayment}</td>
                       <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(order.pricePaid)}</td>
                       <td className={`px-4 py-3 font-medium ${order.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(order.profit)}</td>
                       <td className="px-4 py-3"><StatusSelect currentStatus={order.orderStatus} onUpdate={(s) => updateStatus(order.rowIndex, s)} /></td>
                       <td className="px-4 py-3">
-                        <Link to={`/orders/${order.rowIndex}`} className="text-terracotta-600 hover:text-terracotta-800"><Eye size={16} /></Link>
+                        <div className="flex items-center gap-2">
+                          <Link to={`/orders/${order.rowIndex}`} className="text-terracotta-600 hover:text-terracotta-800"><Eye size={16} /></Link>
+                          <button onClick={() => setBillOrder(order)} className="text-gray-400 hover:text-terracotta-600" title="Generate Bill"><FileText size={16} /></button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -487,7 +599,10 @@ export default function Orders() {
                   </div>
                   {/* Customer + Product */}
                   <p className="font-medium text-gray-900 text-sm">{order.customerName}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{order.productOrdered} &times;{order.quantityOrdered}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {order.productLines?.[0]?.productName || order.productOrdered} &times;{order.productLines?.[0]?.quantity || order.quantityOrdered}
+                    {order.productLines?.length > 1 && <span className="text-terracotta-600 font-medium"> (+{order.productLines.length - 1} more)</span>}
+                  </p>
                   {/* Bottom: Price + Profit + Status */}
                   <div className="flex items-center justify-between mt-3">
                     <div className="flex items-center gap-3">
@@ -499,7 +614,7 @@ export default function Orders() {
                 </Link>
                 {/* ⋮ Action menu */}
                 <div className="absolute top-3 right-3">
-                  <CardActionMenu order={order} onStatusChange={(s) => updateStatus(order.rowIndex, s)} />
+                  <CardActionMenu order={order} onStatusChange={(s) => updateStatus(order.rowIndex, s)} onGenerateBill={setBillOrder} />
                 </div>
               </div>
             ))}
@@ -580,7 +695,8 @@ export default function Orders() {
         </>
       )}
 
-      {showAddModal && <AddOrderModal onClose={() => setShowAddModal(false)} onAdded={refresh} />}
+      {showAddModal && <AddOrderModal onClose={() => setShowAddModal(false)} onAdded={refresh} onGenerateBill={setBillOrder} />}
+      {billOrder && <BillModal order={billOrder} onClose={() => setBillOrder(null)} />}
     </div>
   );
 }

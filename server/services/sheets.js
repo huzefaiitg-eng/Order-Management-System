@@ -42,11 +42,15 @@ const COLUMN_MAP = {
   quantityOrdered: 8,
   pricePaid: 9,
   orderStatus: 10,
+  orderNumber: 11,
 };
 
 function rowToOrder(row, rowIndex) {
-  const productCost = parseFloat(row[COLUMN_MAP.productCost]) || 0;
+  const productsRaw = (row[COLUMN_MAP.productOrdered] || '').split('|').map(s => s.trim()).filter(Boolean);
+  const costsRaw = (row[COLUMN_MAP.productCost] || '0').split('|').map(s => parseFloat(s.trim()) || 0);
+  const qtysRaw = (row[COLUMN_MAP.quantityOrdered] || '1').split('|').map(s => parseInt(s.trim()) || 1);
   const pricePaid = parseFloat(row[COLUMN_MAP.pricePaid]) || 0;
+  const totalCost = costsRaw.reduce((sum, c, i) => sum + c * (qtysRaw[i] || 1), 0);
 
   return {
     rowIndex,
@@ -57,11 +61,18 @@ function rowToOrder(row, rowIndex) {
     customerAddress: row[COLUMN_MAP.customerAddress] || '',
     modeOfPayment: row[COLUMN_MAP.modeOfPayment] || '',
     productOrdered: row[COLUMN_MAP.productOrdered] || '',
-    productCost,
-    quantityOrdered: parseInt(row[COLUMN_MAP.quantityOrdered]) || 1,
+    productCost: totalCost,
+    quantityOrdered: qtysRaw.reduce((a, b) => a + b, 0),
     pricePaid,
     orderStatus: row[COLUMN_MAP.orderStatus] || '',
-    profit: pricePaid - productCost,
+    orderNumber: row[COLUMN_MAP.orderNumber] || '',
+    productLines: productsRaw.length > 0 ? productsRaw.map((name, i) => ({
+      productName: name,
+      unitCost: costsRaw[i] || 0,
+      quantity: qtysRaw[i] || 1,
+      lineTotal: (costsRaw[i] || 0) * (qtysRaw[i] || 1),
+    })) : [{ productName: '', unitCost: 0, quantity: 1, lineTotal: 0 }],
+    profit: pricePaid - totalCost,
   };
 }
 
@@ -69,7 +80,7 @@ async function getAllOrders(sheetId) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'Orders!A2:K',
+    range: 'Orders!A2:L',
   });
 
   const rows = response.data.values || [];
@@ -306,19 +317,32 @@ async function updateProduct(sheetId, articleId, updates) {
 }
 
 async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerPhone, customerAddress, modeOfPayment, productOrdered, productCost, quantityOrdered, pricePaid }) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const orderNumber = 'INV-' + Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+
+  const productStr = Array.isArray(productOrdered) ? productOrdered.join(' | ') : productOrdered;
+  const costStr = Array.isArray(productCost) ? productCost.join(' | ') : String(productCost);
+  const qtyStr = Array.isArray(quantityOrdered) ? quantityOrdered.join(' | ') : String(quantityOrdered);
+
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: 'Orders!A:K',
+    range: 'Orders!A:L',
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[orderFrom, orderDate, customerName, customerPhone, customerAddress || '', modeOfPayment, productOrdered, productCost, quantityOrdered || 1, pricePaid, 'Pending']],
+      values: [[orderFrom, orderDate, customerName, customerPhone, customerAddress || '', modeOfPayment, productStr, costStr, qtyStr, pricePaid, 'Pending', orderNumber]],
     },
   });
 
   const updatedRange = response.data.updates.updatedRange;
   const match = updatedRange.match(/(\d+)/g);
   const newRowIndex = parseInt(match[match.length - 1]);
+
+  // Parse back for response
+  const productsArr = Array.isArray(productOrdered) ? productOrdered : [productOrdered];
+  const costsArr = Array.isArray(productCost) ? productCost.map(Number) : [parseFloat(productCost) || 0];
+  const qtysArr = Array.isArray(quantityOrdered) ? quantityOrdered.map(Number) : [parseInt(quantityOrdered) || 1];
+  const totalCost = costsArr.reduce((sum, c, i) => sum + c * (qtysArr[i] || 1), 0);
 
   return {
     rowIndex: newRowIndex,
@@ -328,12 +352,19 @@ async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerP
     customerPhone,
     customerAddress: customerAddress || '',
     modeOfPayment,
-    productOrdered,
-    productCost: parseFloat(productCost) || 0,
-    quantityOrdered: parseInt(quantityOrdered) || 1,
+    productOrdered: productStr,
+    productCost: totalCost,
+    quantityOrdered: qtysArr.reduce((a, b) => a + b, 0),
     pricePaid: parseFloat(pricePaid) || 0,
     orderStatus: 'Pending',
-    profit: (parseFloat(pricePaid) || 0) - (parseFloat(productCost) || 0),
+    orderNumber,
+    productLines: productsArr.map((name, i) => ({
+      productName: name,
+      unitCost: costsArr[i] || 0,
+      quantity: qtysArr[i] || 1,
+      lineTotal: (costsArr[i] || 0) * (qtysArr[i] || 1),
+    })),
+    profit: (parseFloat(pricePaid) || 0) - totalCost,
   };
 }
 

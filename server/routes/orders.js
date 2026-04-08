@@ -25,16 +25,28 @@ router.get('/', async (req, res) => {
 
     let orders = rawOrders.map(order => {
       const masterCustomer = customerMap[order.customerPhone];
-      const masterProduct = productMap[order.productOrdered];
+      const enrichedLines = order.productLines.map(line => {
+        const mp = productMap[line.productName];
+        return {
+          ...line,
+          articleId: mp?.articleId || '',
+          productDescription: mp?.productDescription || '',
+          category: mp?.category || '',
+          subCategory: mp?.subCategory || '',
+          productImages: mp?.productImages || '',
+        };
+      });
+      const firstProduct = productMap[order.productLines[0]?.productName];
       return {
         ...order,
         customerName: masterCustomer?.customerName || order.customerName,
         customerAddress: masterCustomer?.customerAddress || order.customerAddress,
-        articleId: masterProduct?.articleId || '',
-        productDescription: masterProduct?.productDescription || '',
-        category: masterProduct?.category || '',
-        subCategory: masterProduct?.subCategory || '',
-        productImages: masterProduct?.productImages || '',
+        articleId: firstProduct?.articleId || '',
+        productDescription: firstProduct?.productDescription || '',
+        category: firstProduct?.category || '',
+        subCategory: firstProduct?.subCategory || '',
+        productImages: firstProduct?.productImages || '',
+        productLines: enrichedLines,
       };
     });
 
@@ -74,9 +86,22 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { sheetId } = req.user;
-    const { orderFrom, customerName, customerPhone, customerAddress, productOrdered, productCost, pricePaid, modeOfPayment, quantityOrdered } = req.body;
+    const { orderFrom, customerName, customerPhone, customerAddress, productLines, pricePaid, modeOfPayment } = req.body;
 
-    if (!orderFrom || !customerName || !customerPhone || !productOrdered || !modeOfPayment) {
+    // Support both productLines array (multi-product) and legacy single-product fields
+    let productOrdered, productCost, quantityOrdered;
+    if (productLines && Array.isArray(productLines) && productLines.length > 0) {
+      productOrdered = productLines.map(l => l.productName);
+      productCost = productLines.map(l => l.unitCost || 0);
+      quantityOrdered = productLines.map(l => l.quantity || 1);
+    } else {
+      productOrdered = req.body.productOrdered;
+      productCost = req.body.productCost || 0;
+      quantityOrdered = req.body.quantityOrdered || 1;
+    }
+
+    const productCheck = Array.isArray(productOrdered) ? productOrdered[0] : productOrdered;
+    if (!orderFrom || !customerName || !customerPhone || !productCheck || !modeOfPayment) {
       return res.status(400).json({ success: false, error: 'Missing required fields: orderFrom, customerName, customerPhone, productOrdered, modeOfPayment' });
     }
 
@@ -86,8 +111,8 @@ router.post('/', async (req, res) => {
       orderFrom, orderDate, customerName, customerPhone,
       customerAddress: customerAddress || '',
       modeOfPayment, productOrdered,
-      productCost: productCost || 0,
-      quantityOrdered: quantityOrdered || 1,
+      productCost,
+      quantityOrdered,
       pricePaid: pricePaid || 0,
     });
 
