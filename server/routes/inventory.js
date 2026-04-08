@@ -35,11 +35,11 @@ router.get('/summary', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { sheetId } = req.user;
-    const { productName, category, subCategory, productCost, instockQuantity, productDescription, productImages } = req.body;
+    const { productName, category, subCategory, productCost, sellingPrice, instockQuantity, productDescription, productImages } = req.body;
     if (!productName || !category || !subCategory || productCost === undefined || instockQuantity === undefined) {
       return res.status(400).json({ success: false, error: 'Product name, category, sub-category, cost, and instock quantity are required' });
     }
-    const newProduct = await addProduct(sheetId, { productName, productDescription, category, subCategory, productImages, productCost: parseFloat(productCost), instockQuantity: parseInt(instockQuantity) });
+    const newProduct = await addProduct(sheetId, { productName, productDescription, category, subCategory, productImages, productCost: parseFloat(productCost), sellingPrice: parseFloat(sellingPrice) || 0, instockQuantity: parseInt(instockQuantity) });
     res.json({ success: true, data: newProduct });
   } catch (error) {
     console.error('Error adding product:', error.message);
@@ -154,6 +154,7 @@ router.patch('/:articleId', async (req, res) => {
     const articleId = decodeURIComponent(req.params.articleId);
     const updates = req.body;
     if (updates.productCost !== undefined) updates.productCost = parseFloat(updates.productCost);
+    if (updates.sellingPrice !== undefined) updates.sellingPrice = parseFloat(updates.sellingPrice);
     if (updates.instockQuantity !== undefined) updates.instockQuantity = parseInt(updates.instockQuantity);
     const updated = await updateProduct(sheetId, articleId, updates);
     res.json({ success: true, data: updated });

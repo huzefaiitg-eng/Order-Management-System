@@ -13,8 +13,10 @@ export default function BillModal({ order, onClose }) {
 
   const productLines = order.productLines?.length > 0
     ? order.productLines
-    : [{ productName: order.productOrdered, unitCost: order.productCost, quantity: order.quantityOrdered, lineTotal: order.productCost * order.quantityOrdered }];
+    : [{ productName: order.productOrdered, unitCost: order.productCost, unitSellingPrice: order.pricePaid, quantity: order.quantityOrdered, sellingLineTotal: order.pricePaid }];
 
+  const subtotal = productLines.reduce((sum, l) => sum + ((l.unitSellingPrice || l.unitCost || 0) * (l.quantity || 1)), 0);
+  const discountAmount = order.discount || 0;
   const totalAmount = order.pricePaid || 0;
 
   const handleDownload = async () => {
@@ -120,12 +122,24 @@ export default function BillModal({ order, onClose }) {
                   <td style={{ padding: '10px 12px', color: '#666' }}>{i + 1}</td>
                   <td style={{ padding: '10px 12px', fontWeight: '500' }}>{line.productName}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'center' }}>{line.quantity}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>₹{(line.unitCost || 0).toLocaleString('en-IN')}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '500' }}>₹{(line.lineTotal || 0).toLocaleString('en-IN')}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>₹{(line.unitSellingPrice || line.unitCost || 0).toLocaleString('en-IN')}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '500' }}>₹{(line.sellingLineTotal || line.lineTotal || 0).toLocaleString('en-IN')}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
+              {discountAmount > 0 && (
+                <>
+                  <tr>
+                    <td colSpan="4" style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '500', fontSize: '13px', borderTop: '1px solid #eee' }}>Subtotal</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '500', fontSize: '13px', borderTop: '1px solid #eee' }}>₹{subtotal.toLocaleString('en-IN')}</td>
+                  </tr>
+                  <tr>
+                    <td colSpan="4" style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '500', fontSize: '13px', color: '#e53e3e' }}>Discount</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '500', fontSize: '13px', color: '#e53e3e' }}>-₹{discountAmount.toLocaleString('en-IN')}</td>
+                  </tr>
+                </>
+              )}
               <tr>
                 <td colSpan="4" style={{ padding: '12px', textAlign: 'right', fontWeight: '700', fontSize: '15px', borderTop: '2px solid #C8956C' }}>Total</td>
                 <td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', fontSize: '15px', borderTop: '2px solid #C8956C', color: '#C8956C' }}>₹{totalAmount.toLocaleString('en-IN')}</td>

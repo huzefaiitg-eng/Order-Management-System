@@ -86,18 +86,20 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { sheetId } = req.user;
-    const { orderFrom, customerName, customerPhone, customerAddress, productLines, pricePaid, modeOfPayment } = req.body;
+    const { orderFrom, customerName, customerPhone, customerAddress, productLines, pricePaid, modeOfPayment, discount } = req.body;
 
     // Support both productLines array (multi-product) and legacy single-product fields
-    let productOrdered, productCost, quantityOrdered;
+    let productOrdered, productCost, quantityOrdered, sellingPrice;
     if (productLines && Array.isArray(productLines) && productLines.length > 0) {
       productOrdered = productLines.map(l => l.productName);
       productCost = productLines.map(l => l.unitCost || 0);
       quantityOrdered = productLines.map(l => l.quantity || 1);
+      sellingPrice = productLines.map(l => l.unitSellingPrice || 0);
     } else {
       productOrdered = req.body.productOrdered;
       productCost = req.body.productCost || 0;
       quantityOrdered = req.body.quantityOrdered || 1;
+      sellingPrice = req.body.sellingPrice || 0;
     }
 
     const productCheck = Array.isArray(productOrdered) ? productOrdered[0] : productOrdered;
@@ -114,6 +116,8 @@ router.post('/', async (req, res) => {
       productCost,
       quantityOrdered,
       pricePaid: pricePaid || 0,
+      sellingPrice,
+      discount: parseFloat(discount) || 0,
     });
 
     await addAuditEntry(sheetId, { orderRowIndex: result.rowIndex, previousStatus: '', newStatus: 'Pending' });

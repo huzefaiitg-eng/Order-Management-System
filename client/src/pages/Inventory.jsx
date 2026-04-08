@@ -12,15 +12,15 @@ import ErrorMessage from '../components/ErrorMessage';
 
 function AddProductModal({ onClose, onAdded, categories, categorySubCategories }) {
   const [form, setForm] = useState({
-    productName: '', category: '', subCategory: '', productCost: '', instockQuantity: '', productDescription: '',
+    productName: '', category: '', subCategory: '', productCost: '', sellingPrice: '', instockQuantity: '', productDescription: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.productName || !form.category || !form.subCategory || !form.productCost || !form.instockQuantity) {
-      setError('Product name, category, sub-category, cost, and instock quantity are required');
+    if (!form.productName || !form.category || !form.subCategory || !form.productCost || !form.sellingPrice || !form.instockQuantity) {
+      setError('Product name, category, sub-category, cost, selling price, and instock quantity are required');
       return;
     }
     setSaving(true);
@@ -29,6 +29,7 @@ function AddProductModal({ onClose, onAdded, categories, categorySubCategories }
       await addProduct({
         ...form,
         productCost: parseFloat(form.productCost),
+        sellingPrice: parseFloat(form.sellingPrice),
         instockQuantity: parseInt(form.instockQuantity),
       });
       onAdded();
@@ -79,10 +80,15 @@ function AddProductModal({ onClose, onAdded, categories, categorySubCategories }
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="0" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Instock Qty *</label>
-              <input type="number" min="0" value={form.instockQuantity} onChange={e => setForm({ ...form, instockQuantity: e.target.value })}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price *</label>
+              <input type="number" min="0" step="0.01" value={form.sellingPrice} onChange={e => setForm({ ...form, sellingPrice: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="0" />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Instock Qty *</label>
+            <input type="number" min="0" value={form.instockQuantity} onChange={e => setForm({ ...form, instockQuantity: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="0" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -278,6 +284,7 @@ export default function Inventory() {
                     { key: 'category', label: 'Category' },
                     { key: 'subCategory', label: 'Sub Category' },
                     { key: 'productCost', label: 'Cost' },
+                    { key: 'sellingPrice', label: 'Selling Price' },
                     { key: 'instockQuantity', label: 'In Stock' },
                     { key: 'quantityInActiveOrders', label: 'Active Orders' },
                     { key: 'availableQuantity', label: 'Available' },
@@ -312,6 +319,7 @@ export default function Inventory() {
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{product.subCategory}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(product.productCost)}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(product.sellingPrice)}</td>
                     <td className="px-4 py-3 text-center font-medium">{product.instockQuantity}</td>
                     <td className="px-4 py-3 text-center">{product.quantityInActiveOrders}</td>
                     <td className="px-4 py-3">
@@ -345,7 +353,7 @@ export default function Inventory() {
                 ))}
                 {sorted.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-gray-500">No products found</td>
+                    <td colSpan={11} className="px-4 py-8 text-center text-gray-500">No products found</td>
                   </tr>
                 )}
               </tbody>

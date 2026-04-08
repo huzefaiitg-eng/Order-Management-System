@@ -43,14 +43,21 @@ const COLUMN_MAP = {
   pricePaid: 9,
   orderStatus: 10,
   orderNumber: 11,
+  sellingPrice: 12,
+  discount: 13,
 };
 
 function rowToOrder(row, rowIndex) {
   const productsRaw = (row[COLUMN_MAP.productOrdered] || '').split('|').map(s => s.trim()).filter(Boolean);
   const costsRaw = (row[COLUMN_MAP.productCost] || '0').split('|').map(s => parseFloat(s.trim()) || 0);
   const qtysRaw = (row[COLUMN_MAP.quantityOrdered] || '1').split('|').map(s => parseInt(s.trim()) || 1);
+  const sellingPricesRaw = (row[COLUMN_MAP.sellingPrice] || '').split('|').map(s => parseFloat(s.trim()) || 0);
   const pricePaid = parseFloat(row[COLUMN_MAP.pricePaid]) || 0;
+  const discount = parseFloat(row[COLUMN_MAP.discount]) || 0;
   const totalCost = costsRaw.reduce((sum, c, i) => sum + c * (qtysRaw[i] || 1), 0);
+  const subtotal = sellingPricesRaw.some(v => v > 0)
+    ? sellingPricesRaw.reduce((sum, sp, i) => sum + sp * (qtysRaw[i] || 1), 0)
+    : pricePaid + discount; // backward compat for old orders
 
   return {
     rowIndex,
@@ -64,14 +71,18 @@ function rowToOrder(row, rowIndex) {
     productCost: totalCost,
     quantityOrdered: qtysRaw.reduce((a, b) => a + b, 0),
     pricePaid,
+    discount,
+    subtotal,
     orderStatus: row[COLUMN_MAP.orderStatus] || '',
     orderNumber: row[COLUMN_MAP.orderNumber] || '',
     productLines: productsRaw.length > 0 ? productsRaw.map((name, i) => ({
       productName: name,
       unitCost: costsRaw[i] || 0,
+      unitSellingPrice: sellingPricesRaw[i] || costsRaw[i] || 0,
       quantity: qtysRaw[i] || 1,
       lineTotal: (costsRaw[i] || 0) * (qtysRaw[i] || 1),
-    })) : [{ productName: '', unitCost: 0, quantity: 1, lineTotal: 0 }],
+      sellingLineTotal: (sellingPricesRaw[i] || costsRaw[i] || 0) * (qtysRaw[i] || 1),
+    })) : [{ productName: '', unitCost: 0, unitSellingPrice: 0, quantity: 1, lineTotal: 0, sellingLineTotal: 0 }],
     profit: pricePaid - totalCost,
   };
 }
@@ -80,7 +91,7 @@ async function getAllOrders(sheetId) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'Orders!A2:L',
+    range: 'Orders!A2:N',
   });
 
   const rows = response.data.values || [];
@@ -234,6 +245,7 @@ function rowToProduct(row, rowIndex) {
     subCategory: row[INVENTORY_COLUMN_MAP.subCategory] || '',
     productImages: row[INVENTORY_COLUMN_MAP.productImages] || '',
     productCost: parseFloat(row[INVENTORY_COLUMN_MAP.productCost]) || 0,
+    sellingPrice: parseFloat(row[INVENTORY_COLUMN_MAP.sellingPrice]) || 0,
     instockQuantity,
     quantityInActiveOrders,
     availableQuantity: instockQuantity - quantityInActiveOrders,
@@ -257,7 +269,7 @@ async function getProductByArticleId(sheetId, articleId) {
   return products.find(p => p.articleId === articleId) || null;
 }
 
-async function addProduct(sheetId, { productName, productDescription, category, subCategory, productImages, productCost, instockQuantity }) {
+async function addProduct(sheetId, { productName, productDescription, category, subCategory, productImages, productCost, sellingPrice, instockQuantity }) {
   const products = await getAllInventory(sheetId);
 
   const maxNum = products.reduce((max, p) => {
@@ -272,7 +284,7 @@ async function addProduct(sheetId, { productName, productDescription, category, 
     range: 'Inventory!A:K',
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[newId, productName, productDescription || '', category, subCategory, productImages || '', productCost, '', instockQuantity, 0, 'Active']],
+      values: [[newId, productName, productDescription || '', category, subCategory, productImages || '', productCost, sellingPrice || 0, instockQuantity, 0, 'Active']],
     },
   });
 
@@ -284,6 +296,7 @@ async function addProduct(sheetId, { productName, productDescription, category, 
     subCategory,
     productImages: productImages || '',
     productCost,
+    sellingPrice: sellingPrice || 0,
     instockQuantity,
     quantityInActiveOrders: 0,
     availableQuantity: instockQuantity,
@@ -305,6 +318,7 @@ async function updateProduct(sheetId, articleId, updates) {
   if (updates.category !== undefined) data.push({ range: `Inventory!D${rowIdx}`, values: [[updates.category]] });
   if (updates.subCategory !== undefined) data.push({ range: `Inventory!E${rowIdx}`, values: [[updates.subCategory]] });
   if (updates.productCost !== undefined) data.push({ range: `Inventory!G${rowIdx}`, values: [[updates.productCost]] });
+  if (updates.sellingPrice !== undefined) data.push({ range: `Inventory!H${rowIdx}`, values: [[updates.sellingPrice]] });
   if (updates.instockQuantity !== undefined) data.push({ range: `Inventory!I${rowIdx}`, values: [[updates.instockQuantity]] });
 
   if (data.length > 0) {
@@ -317,21 +331,22 @@ async function updateProduct(sheetId, articleId, updates) {
   return { ...product, ...updates };
 }
 
-async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerPhone, customerAddress, modeOfPayment, productOrdered, productCost, quantityOrdered, pricePaid }) {
+async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerPhone, customerAddress, modeOfPayment, productOrdered, productCost, quantityOrdered, pricePaid, sellingPrice, discount }) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const orderNumber = 'INV-' + Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 
   const productStr = Array.isArray(productOrdered) ? productOrdered.join(' | ') : productOrdered;
   const costStr = Array.isArray(productCost) ? productCost.join(' | ') : String(productCost);
   const qtyStr = Array.isArray(quantityOrdered) ? quantityOrdered.join(' | ') : String(quantityOrdered);
+  const sellingPriceStr = Array.isArray(sellingPrice) ? sellingPrice.join(' | ') : String(sellingPrice || 0);
 
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: 'Orders!A:L',
+    range: 'Orders!A:N',
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[orderFrom, orderDate, customerName, customerPhone, customerAddress || '', modeOfPayment, productStr, costStr, qtyStr, pricePaid, 'Pending', orderNumber]],
+      values: [[orderFrom, orderDate, customerName, customerPhone, customerAddress || '', modeOfPayment, productStr, costStr, qtyStr, pricePaid, 'Pending', orderNumber, sellingPriceStr, discount || 0]],
     },
   });
 
@@ -343,7 +358,10 @@ async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerP
   const productsArr = Array.isArray(productOrdered) ? productOrdered : [productOrdered];
   const costsArr = Array.isArray(productCost) ? productCost.map(Number) : [parseFloat(productCost) || 0];
   const qtysArr = Array.isArray(quantityOrdered) ? quantityOrdered.map(Number) : [parseInt(quantityOrdered) || 1];
+  const sellingArr = Array.isArray(sellingPrice) ? sellingPrice.map(Number) : [parseFloat(sellingPrice) || 0];
   const totalCost = costsArr.reduce((sum, c, i) => sum + c * (qtysArr[i] || 1), 0);
+  const subtotal = sellingArr.reduce((sum, sp, i) => sum + sp * (qtysArr[i] || 1), 0);
+  const discountVal = parseFloat(discount) || 0;
 
   return {
     rowIndex: newRowIndex,
@@ -357,13 +375,17 @@ async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerP
     productCost: totalCost,
     quantityOrdered: qtysArr.reduce((a, b) => a + b, 0),
     pricePaid: parseFloat(pricePaid) || 0,
+    discount: discountVal,
+    subtotal,
     orderStatus: 'Pending',
     orderNumber,
     productLines: productsArr.map((name, i) => ({
       productName: name,
       unitCost: costsArr[i] || 0,
+      unitSellingPrice: sellingArr[i] || 0,
       quantity: qtysArr[i] || 1,
       lineTotal: (costsArr[i] || 0) * (qtysArr[i] || 1),
+      sellingLineTotal: (sellingArr[i] || 0) * (qtysArr[i] || 1),
     })),
     profit: (parseFloat(pricePaid) || 0) - totalCost,
   };

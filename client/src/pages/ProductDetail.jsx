@@ -50,6 +50,7 @@ export default function ProductDetail() {
       category: product.category,
       subCategory: product.subCategory,
       productCost: product.productCost,
+      sellingPrice: product.sellingPrice,
       instockQuantity: product.instockQuantity,
     });
     setEditing(true);
@@ -67,12 +68,14 @@ export default function ProductDetail() {
       await updateProduct(articleId, {
         ...editForm,
         productCost: parseFloat(editForm.productCost),
+        sellingPrice: parseFloat(editForm.sellingPrice),
         instockQuantity: parseInt(editForm.instockQuantity),
       });
       setProduct(prev => ({
         ...prev,
         ...editForm,
         productCost: parseFloat(editForm.productCost),
+        sellingPrice: parseFloat(editForm.sellingPrice),
         instockQuantity: parseInt(editForm.instockQuantity),
         availableQuantity: parseInt(editForm.instockQuantity) - prev.quantityInActiveOrders,
       }));
@@ -134,6 +137,11 @@ export default function ProductDetail() {
                       className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-32" />
                   </div>
                   <div>
+                    <label className="block text-xs text-gray-500 mb-1">Selling Price</label>
+                    <input type="number" min="0" step="0.01" value={editForm.sellingPrice} onChange={e => setEditForm({ ...editForm, sellingPrice: e.target.value })}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-32" />
+                  </div>
+                  <div>
                     <label className="block text-xs text-gray-500 mb-1">Instock Qty</label>
                     <input type="number" min="0" value={editForm.instockQuantity} onChange={e => setEditForm({ ...editForm, instockQuantity: e.target.value })}
                       className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-32" />
@@ -176,12 +184,19 @@ export default function ProductDetail() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-4 mt-6">
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
             <IndianRupee size={18} className="text-gray-600" />
             <div>
               <p className="text-xs text-gray-500">Cost Price</p>
               <p className="text-lg font-bold text-gray-900">{formatCurrency(product.productCost)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <IndianRupee size={18} className="text-terracotta-600" />
+            <div>
+              <p className="text-xs text-gray-500">Selling Price</p>
+              <p className="text-lg font-bold text-gray-900">{formatCurrency(product.sellingPrice)}</p>
             </div>
           </div>
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">

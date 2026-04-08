@@ -87,7 +87,7 @@ export default function OrderDetail() {
                           {line.category && <span className="ml-2 text-xs text-gray-500">{line.category}</span>}
                         </div>
                         <div className="text-sm text-gray-600">
-                          &times;{line.quantity} &middot; {formatCurrency(line.unitCost)}/unit &middot; <span className="font-medium">{formatCurrency(line.lineTotal)}</span>
+                          &times;{line.quantity} &middot; {formatCurrency(line.unitSellingPrice || line.unitCost)}/unit &middot; <span className="font-medium">{formatCurrency(line.sellingLineTotal || line.lineTotal)}</span>
                         </div>
                       </div>
                     ))}
@@ -185,6 +185,15 @@ export default function OrderDetail() {
                 <p className="text-sm font-medium text-gray-900">{formatCurrency(order.pricePaid)}</p>
               </div>
             </div>
+            {order.discount > 0 && (
+              <div className="flex items-center gap-3">
+                <CreditCard size={18} className="text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-500">Discount</p>
+                  <p className="text-sm font-medium text-red-600">-{formatCurrency(order.discount)}</p>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <CreditCard size={18} className="text-gray-400" />
               <div>

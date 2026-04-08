@@ -106,9 +106,9 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
   const [createdOrder, setCreatedOrder] = useState(null);
   const [form, setForm] = useState({
     orderDate: new Date().toLocaleDateString('en-GB'), orderFrom: '', customerName: '', customerPhone: '',
-    customerAddress: '', modeOfPayment: '', pricePaid: '',
+    customerAddress: '', modeOfPayment: '', discount: 0,
   });
-  const [productLines, setProductLines] = useState([{ productName: '', unitCost: 0, quantity: 1 }]);
+  const [productLines, setProductLines] = useState([{ productName: '', unitCost: 0, unitSellingPrice: 0, quantity: 1 }]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -116,7 +116,7 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
   const [addingNewCustomer, setAddingNewCustomer] = useState(false);
   const [addingNewProductIdx, setAddingNewProductIdx] = useState(-1);
   const [newCustomer, setNewCustomer] = useState({ customerName: '', customerPhone: '', customerAddress: '' });
-  const [newProduct, setNewProduct] = useState({ productName: '', category: '', subCategory: '', productCost: '', instockQuantity: '' });
+  const [newProduct, setNewProduct] = useState({ productName: '', category: '', subCategory: '', productCost: '', sellingPrice: '', instockQuantity: '' });
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [savingProduct, setSavingProduct] = useState(false);
 
@@ -128,14 +128,17 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
   const handleCustomerSelect = (c) => setForm(f => ({ ...f, customerName: c.customerName, customerPhone: c.customerPhone, customerAddress: c.customerAddress }));
 
   const handleProductSelectForLine = (idx, p) => {
-    setProductLines(prev => prev.map((line, i) => i === idx ? { ...line, productName: p.productName, unitCost: p.productCost || 0 } : line));
+    setProductLines(prev => prev.map((line, i) => i === idx ? { ...line, productName: p.productName, unitCost: p.productCost || 0, unitSellingPrice: p.sellingPrice || p.productCost || 0 } : line));
   };
 
-  const addProductLine = () => setProductLines(prev => [...prev, { productName: '', unitCost: 0, quantity: 1 }]);
+  const addProductLine = () => setProductLines(prev => [...prev, { productName: '', unitCost: 0, unitSellingPrice: 0, quantity: 1 }]);
   const removeProductLine = (idx) => setProductLines(prev => prev.filter((_, i) => i !== idx));
   const updateProductLine = (idx, field, value) => setProductLines(prev => prev.map((line, i) => i === idx ? { ...line, [field]: value } : line));
 
   const totalCost = productLines.reduce((sum, l) => sum + (l.unitCost || 0) * (l.quantity || 1), 0);
+  const subtotal = productLines.reduce((sum, l) => sum + (l.unitSellingPrice || 0) * (l.quantity || 1), 0);
+  const discount = parseFloat(form.discount) || 0;
+  const pricePaid = Math.max(0, subtotal - discount);
 
   const handleAddNewCustomer = async () => {
     if (!newCustomer.customerName || !newCustomer.customerPhone) { setError('Customer name and phone are required'); return; }
@@ -152,10 +155,10 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
     if (!newProduct.productName || !newProduct.category || !newProduct.productCost) { setError('Product name, category, and cost are required'); return; }
     setSavingProduct(true);
     try {
-      const created = await addProduct({ ...newProduct, instockQuantity: parseInt(newProduct.instockQuantity) || 0 });
+      const created = await addProduct({ ...newProduct, sellingPrice: parseFloat(newProduct.sellingPrice) || 0, instockQuantity: parseInt(newProduct.instockQuantity) || 0 });
       setProducts(prev => [...prev, created]);
       handleProductSelectForLine(lineIdx, created);
-      setAddingNewProductIdx(-1); setNewProduct({ productName: '', category: '', subCategory: '', productCost: '', instockQuantity: '' }); setError('');
+      setAddingNewProductIdx(-1); setNewProduct({ productName: '', category: '', subCategory: '', productCost: '', sellingPrice: '', instockQuantity: '' }); setError('');
     } catch (err) { setError(err.message); } finally { setSavingProduct(false); }
   };
 
@@ -169,8 +172,9 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
     try {
       const result = await addOrder({
         ...form,
-        productLines: validLines,
-        pricePaid: parseFloat(form.pricePaid) || 0,
+        productLines: validLines.map(l => ({ ...l, unitSellingPrice: l.unitSellingPrice || 0 })),
+        pricePaid,
+        discount,
       });
       setCreatedOrder(result);
       onAdded();
@@ -203,7 +207,10 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
                 </div>
               ))}
             </div>
-            <div className="border-t border-gray-200 pt-2 flex justify-between"><span className="text-gray-500">Price Paid</span><span className="font-semibold text-gray-900">{formatCurrency(createdOrder.pricePaid)}</span></div>
+            {createdOrder.discount > 0 && (
+              <div className="border-t border-gray-200 pt-2 flex justify-between"><span className="text-gray-500">Discount</span><span className="font-medium text-red-600">-{formatCurrency(createdOrder.discount)}</span></div>
+            )}
+            <div className={`${createdOrder.discount > 0 ? '' : 'border-t border-gray-200 pt-2 '}flex justify-between`}><span className="text-gray-500">Price Paid</span><span className="font-semibold text-gray-900">{formatCurrency(createdOrder.pricePaid)}</span></div>
             <div className="flex justify-between"><span className="text-gray-500">Profit</span><span className={`font-semibold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(profit)}</span></div>
             <div className="flex justify-between items-center"><span className="text-gray-500">Status</span><StatusBadge status="Pending" /></div>
           </div>
@@ -291,8 +298,8 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
                           <input type="number" min="1" value={line.quantity} onChange={e => updateProductLine(idx, 'quantity', parseInt(e.target.value) || 1)} className={inputClass} />
                         </div>
                         <div className="flex-1">
-                          <label className="block text-xs text-gray-500 mb-1">Unit Cost</label>
-                          <input type="number" value={line.unitCost} onChange={e => updateProductLine(idx, 'unitCost', parseFloat(e.target.value) || 0)} className={inputClass} />
+                          <label className="block text-xs text-gray-500 mb-1">Selling Price</label>
+                          <input type="number" value={line.unitSellingPrice} onChange={e => updateProductLine(idx, 'unitSellingPrice', parseFloat(e.target.value) || 0)} className={inputClass} />
                         </div>
                       </div>
                     </>
@@ -312,6 +319,7 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
                         {(categorySubCategories[newProduct.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                       <input type="number" value={newProduct.productCost} onChange={e => setNewProduct({ ...newProduct, productCost: e.target.value })} className={inputClass} placeholder="Cost price *" />
+                      <input type="number" value={newProduct.sellingPrice} onChange={e => setNewProduct({ ...newProduct, sellingPrice: e.target.value })} className={inputClass} placeholder="Selling price" />
                       <input type="number" value={newProduct.instockQuantity} onChange={e => setNewProduct({ ...newProduct, instockQuantity: e.target.value })} className={inputClass} placeholder="In-stock quantity" />
                       <button type="button" onClick={() => handleAddNewProduct(idx)} disabled={savingProduct}
                         className="w-full px-3 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
@@ -326,7 +334,11 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
               className="mt-2 flex items-center gap-1.5 text-sm text-terracotta-600 hover:text-terracotta-700 font-medium">
               <Plus size={14} /> Add Another Product
             </button>
-            <div className="mt-2 text-xs text-gray-500">Total Cost: <span className="font-medium text-gray-700">{formatCurrency(totalCost)}</span></div>
+            <div className="mt-2 text-xs text-gray-500 space-x-3">
+              <span>Subtotal: <span className="font-medium text-gray-700">{formatCurrency(subtotal)}</span></span>
+              {discount > 0 && <span>Discount: <span className="font-medium text-red-600">-{formatCurrency(discount)}</span></span>}
+              <span>Total: <span className="font-semibold text-gray-900">{formatCurrency(pricePaid)}</span></span>
+            </div>
           </div>
 
           <div>
@@ -337,8 +349,12 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Price Paid</label>
-            <input type="number" value={form.pricePaid} onChange={e => setForm({ ...form, pricePaid: e.target.value })} className={inputClass} placeholder="Amount paid by customer" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Discount</label>
+            <input type="number" min="0" value={form.discount} onChange={e => setForm({ ...form, discount: e.target.value })} className={inputClass} placeholder="0" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Price Paid (auto-calculated)</label>
+            <input type="number" value={pricePaid} readOnly className={`${inputClass} bg-gray-50 cursor-not-allowed`} />
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
@@ -543,7 +559,7 @@ export default function Orders() {
                       { key: 'orderDate', label: 'Date' }, { key: 'orderFrom', label: 'Source' },
                       { key: 'customerName', label: 'Customer' }, { key: 'productOrdered', label: 'Product' },
                       { key: 'quantityOrdered', label: 'Qty' }, { key: 'modeOfPayment', label: 'Payment' },
-                      { key: 'pricePaid', label: 'Price' }, { key: 'profit', label: 'Profit' },
+                      { key: 'pricePaid', label: 'Price' }, { key: 'discount', label: 'Discount' }, { key: 'profit', label: 'Profit' },
                       { key: 'orderStatus', label: 'Status' }, { key: null, label: 'Actions' },
                     ].map(col => (
                       <th key={col.label} onClick={() => col.key && handleSort(col.key)}
@@ -568,6 +584,7 @@ export default function Orders() {
                       <td className="px-4 py-3 text-center text-gray-600">{order.quantityOrdered}</td>
                       <td className="px-4 py-3 text-gray-600">{order.modeOfPayment}</td>
                       <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(order.pricePaid)}</td>
+                      <td className="px-4 py-3 text-gray-600">{order.discount > 0 ? formatCurrency(order.discount) : '-'}</td>
                       <td className={`px-4 py-3 font-medium ${order.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(order.profit)}</td>
                       <td className="px-4 py-3"><StatusSelect currentStatus={order.orderStatus} onUpdate={(s) => updateStatus(order.rowIndex, s)} /></td>
                       <td className="px-4 py-3">
@@ -579,7 +596,7 @@ export default function Orders() {
                     </tr>
                   ))}
                   {visibleOrders.length === 0 && (
-                    <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-500">No orders found</td></tr>
+                    <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-500">No orders found</td></tr>
                   )}
                 </tbody>
               </table>
