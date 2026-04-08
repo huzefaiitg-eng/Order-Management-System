@@ -40,9 +40,18 @@ router.get('/', async (req, res) => {
 
     const { source, status, payment, search, startDate, endDate } = req.query;
 
-    if (source) orders = orders.filter(o => o.orderFrom.toLowerCase() === source.toLowerCase());
-    if (status) orders = orders.filter(o => o.orderStatus.toLowerCase() === status.toLowerCase());
-    if (payment) orders = orders.filter(o => o.modeOfPayment.toLowerCase() === payment.toLowerCase());
+    if (source) {
+      const vals = source.split(',').map(s => s.trim().toLowerCase());
+      orders = orders.filter(o => vals.includes(o.orderFrom.toLowerCase()));
+    }
+    if (status) {
+      const vals = status.split(',').map(s => s.trim().toLowerCase());
+      orders = orders.filter(o => vals.includes(o.orderStatus.toLowerCase()));
+    }
+    if (payment) {
+      const vals = payment.split(',').map(p => p.trim().toLowerCase());
+      orders = orders.filter(o => vals.includes(o.modeOfPayment.toLowerCase()));
+    }
     if (search) {
       const q = search.toLowerCase();
       orders = orders.filter(o =>

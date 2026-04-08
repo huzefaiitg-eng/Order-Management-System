@@ -72,7 +72,7 @@ export function isAuthenticated() {
 export function fetchOrders(filters = {}) {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
-    if (value) params.append(key, value);
+    if (value) params.append(key, Array.isArray(value) ? value.join(',') : value);
   });
   const query = params.toString();
   return request(`/orders${query ? `?${query}` : ''}`);

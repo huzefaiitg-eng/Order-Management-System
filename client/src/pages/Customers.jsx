@@ -128,19 +128,20 @@ export default function Customers() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
+          <button onClick={refresh} className="p-1.5 rounded-lg text-gray-400 hover:text-terracotta-600 hover:bg-terracotta-50 transition-colors" title="Refresh">
+            <RefreshCw size={18} />
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <Link to="/customers/archived" className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
             <Archive size={16} />
-            Archived
+            <span className="hidden md:inline">Archived</span>
           </Link>
           <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-3 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 transition-colors">
             <Plus size={16} />
-            Add Customer
-          </button>
-          <button onClick={refresh} className="flex items-center gap-2 px-3 py-2 text-sm bg-terracotta-50 text-terracotta-700 rounded-lg hover:bg-terracotta-100 transition-colors">
-            <RefreshCw size={16} />
-            Refresh
+            <span className="hidden md:inline">Add Customer</span>
           </button>
         </div>
       </div>
