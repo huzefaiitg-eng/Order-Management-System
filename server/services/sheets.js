@@ -215,9 +215,10 @@ const INVENTORY_COLUMN_MAP = {
   subCategory: 4,
   productImages: 5,
   productCost: 6,
-  instockQuantity: 7,
-  quantityInActiveOrders: 8,
-  status: 9,
+  sellingPrice: 7,
+  instockQuantity: 8,
+  quantityInActiveOrders: 9,
+  status: 10,
 };
 
 function rowToProduct(row, rowIndex) {
@@ -244,7 +245,7 @@ async function getAllInventory(sheetId) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'Inventory!A2:J',
+    range: 'Inventory!A2:K',
   });
 
   const rows = response.data.values || [];
@@ -268,10 +269,10 @@ async function addProduct(sheetId, { productName, productDescription, category, 
   const sheets = await getClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: 'Inventory!A:J',
+    range: 'Inventory!A:K',
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[newId, productName, productDescription || '', category, subCategory, productImages || '', productCost, instockQuantity, 0, 'Active']],
+      values: [[newId, productName, productDescription || '', category, subCategory, productImages || '', productCost, '', instockQuantity, 0, 'Active']],
     },
   });
 
@@ -304,7 +305,7 @@ async function updateProduct(sheetId, articleId, updates) {
   if (updates.category !== undefined) data.push({ range: `Inventory!D${rowIdx}`, values: [[updates.category]] });
   if (updates.subCategory !== undefined) data.push({ range: `Inventory!E${rowIdx}`, values: [[updates.subCategory]] });
   if (updates.productCost !== undefined) data.push({ range: `Inventory!G${rowIdx}`, values: [[updates.productCost]] });
-  if (updates.instockQuantity !== undefined) data.push({ range: `Inventory!H${rowIdx}`, values: [[updates.instockQuantity]] });
+  if (updates.instockQuantity !== undefined) data.push({ range: `Inventory!I${rowIdx}`, values: [[updates.instockQuantity]] });
 
   if (data.length > 0) {
     await sheets.spreadsheets.values.batchUpdate({
@@ -504,7 +505,7 @@ async function archiveProduct(sheetId, articleId) {
   const sheets = await getClient();
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `Inventory!J${product.rowIndex}`,
+    range: `Inventory!K${product.rowIndex}`,
     valueInputOption: 'RAW',
     requestBody: { values: [['Archived']] },
   });
@@ -520,7 +521,7 @@ async function unarchiveProduct(sheetId, articleId) {
   const sheets = await getClient();
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `Inventory!J${product.rowIndex}`,
+    range: `Inventory!K${product.rowIndex}`,
     valueInputOption: 'RAW',
     requestBody: { values: [['Active']] },
   });
