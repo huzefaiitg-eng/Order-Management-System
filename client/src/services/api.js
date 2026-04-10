@@ -97,13 +97,9 @@ export function fetchOrderAudit(rowIndex) {
 }
 
 // Dashboard & Insights
-export function fetchDashboard(filters = {}) {
-  const params = new URLSearchParams();
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value) params.append(key, value);
-  });
-  const query = params.toString();
-  return request(`/dashboard${query ? `?${query}` : ''}`);
+// Returns { orders, customerKpis, inventoryKpis }. Filtering is now client-side.
+export function fetchDashboard() {
+  return request('/dashboard');
 }
 
 export function fetchInsights() {

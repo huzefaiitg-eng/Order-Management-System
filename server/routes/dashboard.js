@@ -2,41 +2,46 @@ const express = require('express');
 const router = express.Router();
 const { getAllOrders, getAllCustomers, getAllInventory } = require('../services/sheets');
 
-// GET /api/dashboard?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+// GET /api/dashboard
+// Returns raw orders + customer/inventory summary KPIs.
+// Per-card filtering & aggregation now happens client-side so that fetching is
+// a single round-trip even when the user slices multiple cards independently.
 router.get('/', async (req, res) => {
   try {
     const { sheetId } = req.user;
-    const { startDate, endDate } = req.query;
     const [orders, customers, inventory] = await Promise.all([
       getAllOrders(sheetId),
       getAllCustomers(sheetId),
       getAllInventory(sheetId),
     ]);
 
-    // Filter by date range if provided
-    let filtered = orders;
-    if (startDate || endDate) {
-      const start = startDate ? new Date(startDate) : new Date(0);
-      const end = endDate ? new Date(endDate) : new Date();
-      end.setHours(23, 59, 59, 999);
-      filtered = orders.filter(o => {
-        const d = parseDate(o.orderDate);
-        if (isNaN(d.getTime())) return false;
-        return d >= start && d <= end;
-      });
+    // Soft warning: if order volume grows very large, revisit server-side
+    // aggregation so we don't balloon the payload.
+    if (orders.length > 10000) {
+      console.warn(`[dashboard] Large order payload: ${orders.length} rows. Consider server-side aggregation.`);
     }
 
-    const totalOrders = filtered.length;
-    const totalRevenue = filtered.reduce((sum, o) => sum + o.pricePaid, 0);
-    const totalProfit = filtered.reduce((sum, o) => sum + o.profit, 0);
-    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    const returnedOrders = filtered.filter(o => o.orderStatus === 'Returned').length;
-    const returnRate = totalOrders > 0 ? (returnedOrders / totalOrders) * 100 : 0;
+    // Strip each order to only the fields the dashboard uses.
+    const trimmedOrders = orders.map(o => ({
+      rowIndex: o.rowIndex,
+      orderDate: o.orderDate,
+      orderFrom: o.orderFrom,
+      customerName: o.customerName,
+      customerPhone: o.customerPhone,
+      productLines: Array.isArray(o.productLines)
+        ? o.productLines.map(l => ({ productName: l.productName }))
+        : [],
+      pricePaid: o.pricePaid,
+      profit: o.profit,
+      orderStatus: o.orderStatus,
+      modeOfPayment: o.modeOfPayment,
+    }));
 
     // Customer KPIs (always full dataset, not date-filtered)
     const activeCustomers = customers.filter(
       c => c.status !== 'Archived' && c.anyActiveOrder === 'Yes'
     ).length;
+
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const recentPhones = new Set(
@@ -55,49 +60,20 @@ router.get('/', async (req, res) => {
       p => p.status !== 'Archived' && p.availableQuantity > 0 && p.availableQuantity < 5
     ).length;
 
-    const ordersBySource = {};
-    filtered.forEach(o => {
-      ordersBySource[o.orderFrom] = (ordersBySource[o.orderFrom] || 0) + 1;
-    });
-
-    const statusBreakdown = {};
-    filtered.forEach(o => {
-      statusBreakdown[o.orderStatus] = (statusBreakdown[o.orderStatus] || 0) + 1;
-    });
-
-    const paymentDistribution = {};
-    filtered.forEach(o => {
-      paymentDistribution[o.modeOfPayment] = (paymentDistribution[o.modeOfPayment] || 0) + 1;
-    });
-
-    const revenueByDate = {};
-    const profitByDate = {};
-    filtered.forEach(o => {
-      const date = o.orderDate || 'Unknown';
-      revenueByDate[date] = (revenueByDate[date] || 0) + o.pricePaid;
-      profitByDate[date] = (profitByDate[date] || 0) + o.profit;
-    });
-
-    const revenueOverTime = Object.entries(revenueByDate)
-      .map(([date, revenue]) => ({ date, revenue, profit: profitByDate[date] || 0 }))
-      .sort((a, b) => parseDate(a.date) - parseDate(b.date));
-
     res.json({
       success: true,
       data: {
-        kpis: {
-          totalOrders, totalRevenue, totalProfit, avgOrderValue, returnRate,
+        orders: trimmedOrders,
+        customerKpis: {
           totalCustomers: customers.filter(c => c.status !== 'Archived').length,
           activeCustomers,
           newCustomers7d,
-          totalInventory: inventory.filter(p => p.status !== 'Archived').length,
-          outOfStockCount,
-          lowStockCount,
         },
-        ordersBySource: Object.entries(ordersBySource).map(([name, value]) => ({ name, value })),
-        statusBreakdown: Object.entries(statusBreakdown).map(([name, value]) => ({ name, value })),
-        paymentDistribution: Object.entries(paymentDistribution).map(([name, value]) => ({ name, value })),
-        revenueOverTime,
+        inventoryKpis: {
+          totalInventory: inventory.filter(p => p.status !== 'Archived').length,
+          lowStockCount,
+          outOfStockCount,
+        },
       },
     });
   } catch (error) {

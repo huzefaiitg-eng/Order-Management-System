@@ -1,8 +1,8 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ShoppingBag, IndianRupee, TrendingUp, BarChart3, RotateCcw,
-  Calendar, Users, Package, X, Zap, AlertTriangle, PackageX,
+  ShoppingBag, TrendingUp, BarChart3, Wallet,
+  Users, Package,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -10,58 +10,31 @@ import {
 } from 'recharts';
 import { useDashboard } from '../hooks/useDashboard';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useCardFilters } from '../hooks/useCardFilters';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
+import FilterableCard from '../components/FilterableCard';
+import CardFilterModal from '../components/CardFilterModal';
 import { formatCurrency, formatPercent, CHART_COLORS } from '../utils/formatters';
+import { fetchCustomers, fetchInventory } from '../services/api';
+import {
+  filterOrders,
+  computeOrdersKpis,
+  computeOrdersBySource,
+  computeStatusBreakdown,
+  computePaymentDistribution,
+  computeRevenueOverTime,
+  computeMultiSeriesRevenueOverTime,
+} from '../utils/dashboardAggregations';
 
-const PRESETS = [
-  { key: 'all', label: 'All Time' },
-  { key: 'today', label: 'Today' },
-  { key: 'yesterday', label: 'Yesterday' },
-  { key: 'last7', label: 'Last 7 Days' },
-  { key: 'last30', label: 'Last 30 Days' },
-  { key: 'custom', label: 'Custom' },
-];
-
-function getDateRange(preset, customRange) {
-  const today = new Date();
-  const fmt = (d) => d.toISOString().split('T')[0];
-  switch (preset) {
-    case 'today':
-      return { startDate: fmt(today), endDate: fmt(today) };
-    case 'yesterday': {
-      const y = new Date(today);
-      y.setDate(y.getDate() - 1);
-      return { startDate: fmt(y), endDate: fmt(y) };
-    }
-    case 'last7': {
-      const d = new Date(today);
-      d.setDate(d.getDate() - 6);
-      return { startDate: fmt(d), endDate: fmt(today) };
-    }
-    case 'last30': {
-      const d = new Date(today);
-      d.setDate(d.getDate() - 29);
-      return { startDate: fmt(d), endDate: fmt(today) };
-    }
-    case 'custom':
-      if (customRange.startDate && customRange.endDate) {
-        return { startDate: customRange.startDate, endDate: customRange.endDate };
-      }
-      return {};
-    case 'all':
-    default:
-      return {};
-  }
-}
-
-function formatPillDate(isoStr) {
-  return new Date(isoStr + 'T00:00:00').toLocaleDateString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
-}
-
-// ── Inline sub-components ────────────────────────────────────────────────────
+const TIME_LABELS = {
+  all: 'All Time',
+  today: 'Today',
+  yesterday: 'Yesterday',
+  last7: 'Last 7 Days',
+  last30: 'Last 30 Days',
+  custom: 'Custom Range',
+};
 
 function StatItem({ label, value, to, color }) {
   const colorClass =
@@ -80,7 +53,7 @@ function StatItem({ label, value, to, color }) {
   return inner;
 }
 
-function GroupCard({ title, icon: Icon, iconBg, children }) {
+function SimpleGroupCard({ title, icon: Icon, iconBg, children }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="flex items-center gap-2 mb-3">
@@ -95,167 +68,119 @@ function GroupCard({ title, icon: Icon, iconBg, children }) {
   );
 }
 
+/** Build the active chips array from an applied filter state. */
+function buildActiveChips(applied, removeChip) {
+  const chips = [];
+  if (applied.timePreset && applied.timePreset !== 'all') {
+    chips.push({
+      key: 'time',
+      label: TIME_LABELS[applied.timePreset] || applied.timePreset,
+      color: 'terracotta',
+      onRemove: () => removeChip('time', null),
+    });
+  }
+  for (const s of applied.sources) {
+    chips.push({ key: `src-${s}`, label: s, color: 'terracotta', onRemove: () => removeChip('source', s) });
+  }
+  for (const c of applied.customers) {
+    chips.push({ key: `cust-${c.customerPhone}`, label: c.customerName, color: 'blue', onRemove: () => removeChip('customer', c.customerPhone) });
+  }
+  for (const p of applied.products) {
+    chips.push({ key: `prod-${p.productName}`, label: p.productName, color: 'amber', onRemove: () => removeChip('product', p.productName) });
+  }
+  return chips;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const [preset, setPreset] = useState('all');
-  const [pendingCustom, setPendingCustom] = useState({ startDate: '', endDate: '' });
-  const [appliedCustom, setAppliedCustom] = useState({ startDate: '', endDate: '' });
-  const [showPopover, setShowPopover] = useState(false);
-  const [popoverSide, setPopoverSide] = useState('right');
+  const { data, loading, error } = useDashboard();
   const isMobile = useIsMobile();
-  const customBtnRef = useRef(null);
 
-  // Close popover on outside click
+  // Master lists for customer / product pickers (fetched once; refreshed on mount)
+  const [allCustomers, setAllCustomers] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
+
   useEffect(() => {
-    function handleClick(e) {
-      if (customBtnRef.current && !customBtnRef.current.contains(e.target)) {
-        setShowPopover(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    fetchCustomers('', 'Active').then(setAllCustomers).catch(() => setAllCustomers([]));
+    fetchInventory({ status: 'Active' }).then(setAllProducts).catch(() => setAllProducts([]));
   }, []);
 
-  // Detect which side the popover should open when it becomes visible
-  useEffect(() => {
-    if (showPopover && customBtnRef.current) {
-      const rect = customBtnRef.current.getBoundingClientRect();
-      setPopoverSide(window.innerWidth - rect.right < 292 ? 'left' : 'right');
+  // One filter state per card
+  const kpiFilters = useCardFilters();
+  const sourceChartFilters = useCardFilters();
+  const revenueChartFilters = useCardFilters();
+  const statusChartFilters = useCardFilters();
+  const paymentChartFilters = useCardFilters();
+
+  // Per-card filtered order slices (memoized)
+  const orders = data?.orders || [];
+
+  const kpiOrders = useMemo(() => filterOrders(orders, kpiFilters.filterQuery), [orders, kpiFilters.filterQuery]);
+  const sourceChartOrders = useMemo(() => filterOrders(orders, sourceChartFilters.filterQuery), [orders, sourceChartFilters.filterQuery]);
+  const revenueChartOrders = useMemo(() => filterOrders(orders, revenueChartFilters.filterQuery), [orders, revenueChartFilters.filterQuery]);
+  const statusChartOrders = useMemo(() => filterOrders(orders, statusChartFilters.filterQuery), [orders, statusChartFilters.filterQuery]);
+  const paymentChartOrders = useMemo(() => filterOrders(orders, paymentChartFilters.filterQuery), [orders, paymentChartFilters.filterQuery]);
+
+  const kpis = useMemo(() => computeOrdersKpis(kpiOrders), [kpiOrders]);
+  const ordersBySource = useMemo(() => computeOrdersBySource(sourceChartOrders), [sourceChartOrders]);
+  const statusBreakdown = useMemo(() => computeStatusBreakdown(statusChartOrders), [statusChartOrders]);
+  const paymentDistribution = useMemo(() => computePaymentDistribution(paymentChartOrders), [paymentChartOrders]);
+
+  // Revenue & Profit chart — decide single-series vs multi-series
+  const revenueChart = useMemo(() => {
+    const applied = revenueChartFilters.applied;
+    const dims = [];
+    if (applied.sources.length >= 2) dims.push({ groupBy: 'source', keys: applied.sources });
+    if (applied.customers.length >= 2) dims.push({ groupBy: 'customer', keys: applied.customers.map(c => c.customerPhone), displayFn: (k) => {
+      const match = applied.customers.find(c => c.customerPhone === k);
+      return match ? match.customerName : k;
+    } });
+    if (applied.products.length >= 2) dims.push({ groupBy: 'product', keys: applied.products.map(p => p.productName) });
+
+    if (dims.length === 1) {
+      const dim = dims[0];
+      const result = computeMultiSeriesRevenueOverTime(revenueChartOrders, {
+        groupBy: dim.groupBy,
+        selectedKeys: dim.keys,
+        displayKeyFn: dim.displayFn || (k => k),
+      });
+      return { mode: 'multi', ...result };
     }
-  }, [showPopover]);
-
-  function handlePresetClick(key) {
-    setPreset(key);
-    if (key !== 'custom') setShowPopover(false);
-    else setShowPopover(prev => !prev);
-  }
-
-  function handleApply() {
-    setAppliedCustom(pendingCustom);
-    setShowPopover(false);
-  }
-
-  function resetToAllTime() {
-    setPreset('all');
-    setAppliedCustom({ startDate: '', endDate: '' });
-    setPendingCustom({ startDate: '', endDate: '' });
-    setShowPopover(false);
-  }
-
-  const filters = useMemo(() => getDateRange(preset, appliedCustom), [preset, appliedCustom]);
-  const { data, loading, error } = useDashboard(filters);
-
-  const pillRange = useMemo(() => {
-    if (preset === 'last7' || preset === 'last30') return getDateRange(preset, {});
-    if (preset === 'custom' && appliedCustom.startDate && appliedCustom.endDate) return appliedCustom;
-    return null;
-  }, [preset, appliedCustom]);
+    // Default: single-series
+    return { mode: 'single', data: computeRevenueOverTime(revenueChartOrders) };
+  }, [revenueChartOrders, revenueChartFilters.applied]);
 
   if (loading) return <Loader />;
   if (error) return <ErrorMessage message={error} />;
   if (!data) return null;
 
-  const { kpis, ordersBySource, statusBreakdown, paymentDistribution, revenueOverTime } = data;
+  const { customerKpis, inventoryKpis } = data;
+  const pieLabel = isMobile ? false : ({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`;
 
-  const pieLabel = isMobile
-    ? false
-    : ({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`;
+  // Chip builders (one per card)
+  const kpiChips = buildActiveChips(kpiFilters.applied, kpiFilters.removeChip);
+  const sourceChartChips = buildActiveChips(sourceChartFilters.applied, sourceChartFilters.removeChip);
+  const revenueChartChips = buildActiveChips(revenueChartFilters.applied, revenueChartFilters.removeChip);
+  const statusChartChips = buildActiveChips(statusChartFilters.applied, statusChartFilters.removeChip);
+  const paymentChartChips = buildActiveChips(paymentChartFilters.applied, paymentChartFilters.removeChip);
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-      {/* Header + Date Filter */}
-      <div className="space-y-2">
+      {/* Header */}
+      <div>
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
-
-        {/* Preset buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          {PRESETS.map(({ key, label }) => {
-            if (key === 'custom') {
-              return (
-                <div key="custom" className="relative" ref={customBtnRef}>
-                  <button
-                    onClick={() => handlePresetClick('custom')}
-                    className={`px-2.5 py-1.5 text-xs sm:text-sm rounded-lg font-medium transition-colors ${
-                      preset === 'custom'
-                        ? 'bg-terracotta-600 text-white'
-                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                  {showPopover && (
-                    <div
-                      className={`absolute ${popoverSide === 'right' ? 'left-0' : 'right-0'} top-10 z-30 bg-white border border-gray-200 rounded-xl shadow-xl p-4 w-72`}
-                    >
-                      <p className="text-sm font-semibold text-gray-800 mb-3">Select date range</p>
-                      <div className="space-y-2.5">
-                        <div>
-                          <label className="text-xs font-medium text-gray-500 block mb-1">From</label>
-                          <input
-                            type="date"
-                            value={pendingCustom.startDate}
-                            onChange={e => setPendingCustom(r => ({ ...r, startDate: e.target.value }))}
-                            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-transparent"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-medium text-gray-500 block mb-1">To</label>
-                          <input
-                            type="date"
-                            value={pendingCustom.endDate}
-                            min={pendingCustom.startDate || undefined}
-                            onChange={e => setPendingCustom(r => ({ ...r, endDate: e.target.value }))}
-                            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-terracotta-500 focus:border-transparent"
-                          />
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleApply}
-                        disabled={!pendingCustom.startDate || !pendingCustom.endDate}
-                        className="mt-4 w-full py-2 bg-terracotta-600 text-white text-sm font-medium rounded-lg hover:bg-terracotta-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            }
-            return (
-              <button
-                key={key}
-                onClick={() => handlePresetClick(key)}
-                className={`px-2.5 py-1.5 text-xs sm:text-sm rounded-lg font-medium transition-colors ${
-                  preset === key
-                    ? 'bg-terracotta-600 text-white'
-                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Active date range pill */}
-        {pillRange && (
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 bg-terracotta-50 border border-terracotta-200 text-terracotta-700 text-xs sm:text-sm rounded-full px-3 py-1 font-medium">
-              <Calendar size={13} />
-              {formatPillDate(pillRange.startDate)} → {formatPillDate(pillRange.endDate)}
-              <button onClick={resetToAllTime} className="ml-1 hover:text-terracotta-900 flex items-center" aria-label="Clear date filter">
-                <X size={13} />
-              </button>
-            </span>
-          </div>
-        )}
       </div>
 
-      {/* ── KPI Groups ──────────────────────────────────────────────────────── */}
-
-      {/* Orders Group — full width */}
-      <GroupCard title="Orders" icon={ShoppingBag} iconBg="bg-terracotta-50 text-terracotta-600">
+      {/* ── 1. Orders KPI Group ───────────────────────────────────────────── */}
+      <FilterableCard
+        title="Orders"
+        icon={ShoppingBag}
+        iconBg="bg-terracotta-50 text-terracotta-600"
+        activeChips={kpiChips}
+        filterCount={kpiFilters.activeCount}
+        onOpenFilters={kpiFilters.openModal}
+      >
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-1">
           <StatItem label="Total Orders" value={kpis.totalOrders} to="/orders" />
           <StatItem label="Total Revenue" value={formatCurrency(kpis.totalRevenue)} color="green" />
@@ -263,54 +188,19 @@ export default function Dashboard() {
           <StatItem label="Avg Order Value" value={formatCurrency(kpis.avgOrderValue)} />
           <StatItem label="Return Rate" value={formatPercent(kpis.returnRate)} color="red" />
         </div>
-      </GroupCard>
+      </FilterableCard>
 
-      {/* Customers + Inventory Groups — side by side */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Customers Group */}
-        <GroupCard title="Customers" icon={Users} iconBg="bg-blue-50 text-blue-600">
-          <div className="grid grid-cols-3 gap-1">
-            <StatItem label="Total" value={kpis.totalCustomers ?? '—'} to="/customers" />
-            <StatItem
-              label="Active"
-              value={kpis.activeCustomers ?? '—'}
-              to="/customers?hasActiveOrders=true"
-              color="green"
-            />
-            <StatItem
-              label="New (7 days)"
-              value={kpis.newCustomers7d ?? '—'}
-              to="/customers"
-            />
-          </div>
-        </GroupCard>
-
-        {/* Inventory Group */}
-        <GroupCard title="Inventory" icon={Package} iconBg="bg-amber-50 text-amber-600">
-          <div className="grid grid-cols-3 gap-1">
-            <StatItem label="Total" value={kpis.totalInventory ?? '—'} to="/inventory" />
-            <StatItem
-              label="Low Stock"
-              value={kpis.lowStockCount ?? '—'}
-              to="/inventory?stockFilter=lowStock"
-              color="amber"
-            />
-            <StatItem
-              label="Out of Stock"
-              value={kpis.outOfStockCount ?? '—'}
-              to="/inventory?stockFilter=outOfStock"
-              color="red"
-            />
-          </div>
-        </GroupCard>
-      </div>
-
-      {/* ── Charts ──────────────────────────────────────────────────────────── */}
-
-      {/* Charts Row 1 */}
+      {/* ── 2. Charts Row A ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Orders by Source</h2>
+        {/* Orders by Source */}
+        <FilterableCard
+          title="Orders by Source"
+          icon={BarChart3}
+          iconBg="bg-terracotta-50 text-terracotta-600"
+          activeChips={sourceChartChips}
+          filterCount={sourceChartFilters.activeCount}
+          onOpenFilters={sourceChartFilters.openModal}
+        >
           <div className="h-[220px] sm:h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={ordersBySource}>
@@ -326,30 +216,78 @@ export default function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </FilterableCard>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Revenue & Profit Over Time</h2>
+        {/* Revenue & Profit Over Time */}
+        <FilterableCard
+          title="Revenue & Profit Over Time"
+          icon={TrendingUp}
+          iconBg="bg-green-50 text-green-600"
+          activeChips={revenueChartChips}
+          filterCount={revenueChartFilters.activeCount}
+          onOpenFilters={revenueChartFilters.openModal}
+          headerExtra={revenueChart.mode === 'multi' && revenueChart.truncated ? (
+            <p className="text-[11px] text-amber-600 mb-2">
+              Showing first 5 of {revenueChart.truncatedCount} selected
+            </p>
+          ) : null}
+        >
           <div className="h-[220px] sm:h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={revenueOverTime}>
+              <LineChart data={revenueChart.data}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="date" tick={{ fontSize: isMobile ? 9 : 11 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(value) => formatCurrency(value)} />
-                <Legend />
-                <Line type="monotone" dataKey="revenue" stroke="#C8956C" strokeWidth={2} name="Revenue" dot={false} />
-                <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} name="Profit" dot={false} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {revenueChart.mode === 'single' ? (
+                  <>
+                    <Line type="monotone" dataKey="revenue" stroke="#C8956C" strokeWidth={2} name="Revenue" dot={false} />
+                    <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} name="Profit" dot={false} />
+                  </>
+                ) : (
+                  revenueChart.seriesKeys.flatMap((key, i) => {
+                    const color = CHART_COLORS[i % CHART_COLORS.length];
+                    return [
+                      <Line
+                        key={`${key}_rev`}
+                        type="monotone"
+                        dataKey={`${key}_rev`}
+                        stroke={color}
+                        strokeWidth={2}
+                        name={`${key} Revenue`}
+                        dot={false}
+                      />,
+                      <Line
+                        key={`${key}_profit`}
+                        type="monotone"
+                        dataKey={`${key}_profit`}
+                        stroke={color}
+                        strokeDasharray="4 4"
+                        strokeWidth={2}
+                        name={`${key} Profit`}
+                        dot={false}
+                      />,
+                    ];
+                  })
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </FilterableCard>
       </div>
 
-      {/* Charts Row 2 */}
+      {/* ── 3. Charts Row B ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Order Status Breakdown</h2>
+        {/* Order Status Breakdown */}
+        <FilterableCard
+          title="Order Status Breakdown"
+          icon={BarChart3}
+          iconBg="bg-blue-50 text-blue-600"
+          activeChips={statusChartChips}
+          filterCount={statusChartFilters.activeCount}
+          onOpenFilters={statusChartFilters.openModal}
+        >
           <div className="h-[250px] sm:h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -373,10 +311,17 @@ export default function Dashboard() {
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </FilterableCard>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4">Payment Mode Distribution</h2>
+        {/* Payment Mode Distribution */}
+        <FilterableCard
+          title="Payment Mode Distribution"
+          icon={Wallet}
+          iconBg="bg-purple-50 text-purple-600"
+          activeChips={paymentChartChips}
+          filterCount={paymentChartFilters.activeCount}
+          onOpenFilters={paymentChartFilters.openModal}
+        >
           <div className="h-[250px] sm:h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -399,8 +344,113 @@ export default function Dashboard() {
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </FilterableCard>
       </div>
+
+      {/* ── 4. Customers + Inventory (unfiltered) ─────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <SimpleGroupCard title="Customers" icon={Users} iconBg="bg-blue-50 text-blue-600">
+          <div className="grid grid-cols-3 gap-1">
+            <StatItem label="Total" value={customerKpis.totalCustomers ?? '—'} to="/customers" />
+            <StatItem
+              label="Active"
+              value={customerKpis.activeCustomers ?? '—'}
+              to="/customers?hasActiveOrders=true"
+              color="green"
+            />
+            <StatItem
+              label="New (7 days)"
+              value={customerKpis.newCustomers7d ?? '—'}
+              to="/customers"
+            />
+          </div>
+        </SimpleGroupCard>
+
+        <SimpleGroupCard title="Inventory" icon={Package} iconBg="bg-amber-50 text-amber-600">
+          <div className="grid grid-cols-3 gap-1">
+            <StatItem label="Total" value={inventoryKpis.totalInventory ?? '—'} to="/inventory" />
+            <StatItem
+              label="Low Stock"
+              value={inventoryKpis.lowStockCount ?? '—'}
+              to="/inventory?stockFilter=lowStock"
+              color="amber"
+            />
+            <StatItem
+              label="Out of Stock"
+              value={inventoryKpis.outOfStockCount ?? '—'}
+              to="/inventory?stockFilter=outOfStock"
+              color="red"
+            />
+          </div>
+        </SimpleGroupCard>
+      </div>
+
+      {/* ── Filter Modals (one per card) ──────────────────────────────────── */}
+      <CardFilterModal
+        open={kpiFilters.isOpen}
+        onClose={kpiFilters.closeModal}
+        title="Filter: Orders KPIs"
+        fields={{ time: true, source: true, customer: true, product: true }}
+        pending={kpiFilters.pending}
+        setPending={kpiFilters.setPending}
+        allCustomers={allCustomers}
+        allProducts={allProducts}
+        onApply={kpiFilters.apply}
+        onClear={kpiFilters.clearAll}
+      />
+
+      <CardFilterModal
+        open={sourceChartFilters.isOpen}
+        onClose={sourceChartFilters.closeModal}
+        title="Filter: Orders by Source"
+        fields={{ time: true, source: false, customer: true, product: true }}
+        pending={sourceChartFilters.pending}
+        setPending={sourceChartFilters.setPending}
+        allCustomers={allCustomers}
+        allProducts={allProducts}
+        onApply={sourceChartFilters.apply}
+        onClear={sourceChartFilters.clearAll}
+      />
+
+      <CardFilterModal
+        open={revenueChartFilters.isOpen}
+        onClose={revenueChartFilters.closeModal}
+        title="Filter: Revenue & Profit"
+        fields={{ time: true, source: true, customer: true, product: true }}
+        pending={revenueChartFilters.pending}
+        setPending={revenueChartFilters.setPending}
+        allCustomers={allCustomers}
+        allProducts={allProducts}
+        multiSeriesHint
+        onApply={revenueChartFilters.apply}
+        onClear={revenueChartFilters.clearAll}
+      />
+
+      <CardFilterModal
+        open={statusChartFilters.isOpen}
+        onClose={statusChartFilters.closeModal}
+        title="Filter: Order Status"
+        fields={{ time: true, source: true, customer: true, product: true }}
+        pending={statusChartFilters.pending}
+        setPending={statusChartFilters.setPending}
+        allCustomers={allCustomers}
+        allProducts={allProducts}
+        onApply={statusChartFilters.apply}
+        onClear={statusChartFilters.clearAll}
+      />
+
+      <CardFilterModal
+        open={paymentChartFilters.isOpen}
+        onClose={paymentChartFilters.closeModal}
+        title="Filter: Payment Mode"
+        fields={{ time: true, source: true, customer: true, product: true }}
+        pending={paymentChartFilters.pending}
+        setPending={paymentChartFilters.setPending}
+        allCustomers={allCustomers}
+        allProducts={allProducts}
+        onApply={paymentChartFilters.apply}
+        onClear={paymentChartFilters.clearAll}
+      />
     </div>
   );
 }

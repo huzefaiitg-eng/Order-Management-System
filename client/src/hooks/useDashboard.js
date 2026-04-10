@@ -1,19 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchDashboard } from '../services/api';
 
-export function useDashboard(filters = {}) {
+/**
+ * Fetches the dashboard raw payload (orders + customer/inventory KPIs) once
+ * on mount. Per-card filtering happens client-side in Dashboard.jsx via
+ * `dashboardAggregations.js`, so this hook takes no arguments.
+ */
+export function useDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    fetchDashboard(filters)
+    fetchDashboard()
       .then(setData)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  }, [JSON.stringify(filters)]);
+  }, []);
 
-  return { data, loading, error };
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return { data, loading, error, refetch: load };
 }

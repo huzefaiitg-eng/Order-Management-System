@@ -77,14 +77,35 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 ## App Features
 
 ### 1. Dashboard (Home Page)
-- **KPI Cards:** Total orders, total revenue, total profit, average order value, return rate
-- **Charts:**
-  - Orders by source (bar/pie chart)
-  - Revenue over time (line chart)
-  - Order status breakdown (donut chart)
-  - Profit margin trends (line chart)
-  - Payment mode distribution (pie chart)
-- **Filters:** Date range, order source, status
+**Layout (top → bottom):**
+1. Orders KPI group (Total Orders, Revenue, Profit, Avg Order Value, Return Rate) — full width
+2. Charts Row A — Orders by Source (bar) + Revenue & Profit Over Time (line)
+3. Charts Row B — Order Status Breakdown (donut) + Payment Mode Distribution (pie)
+4. Customers and Inventory summary group cards (unfiltered master-data counts)
+
+**Per-card filters:** Each of the 5 order-related cards has its OWN independent filter button (icon + "Filters" text on desktop, icon-only on mobile) that opens a centered modal. Active filters are shown as removable chips in the card header. Filter controls use a two-tier pending/applied state — edits only commit when "Apply Filters" is clicked. Individual chips can be removed directly without reopening the modal.
+
+**Filter dimensions per card:**
+| Card | Time | Source | Customer | Product |
+|---|:---:|:---:|:---:|:---:|
+| Orders KPIs | ✓ | ✓ | ✓ | ✓ |
+| Orders by Source | ✓ | ✗ (X-axis) | ✓ | ✓ |
+| Revenue & Profit Over Time | ✓ | ✓ | ✓ | ✓ |
+| Order Status Breakdown | ✓ | ✓ | ✓ | ✓ |
+| Payment Mode Distribution | ✓ | ✓ | ✓ | ✓ |
+
+**Time presets:** All Time, Today, Yesterday, Last 7 Days, Last 30 Days, Custom (date pickers).
+
+**Multi-series Revenue & Profit chart:** When the user selects ≥2 values in exactly ONE dimension (source, customer, or product), the chart renders one line per selected entity — solid for revenue, dashed for profit, cycling through `CHART_COLORS`. If the user selects multiple values in ≥2 dimensions at once, the chart falls back to single-pair lines (a helper note inside the modal explains this). Max 5 entities (= 10 lines) — excess shows a "Showing first 5 of X selected" note.
+
+**Chip color conventions:**
+- Date range / source: terracotta
+- Customer: blue
+- Product/inventory: amber
+
+**Customers and Inventory cards** remain unfiltered and always show all-time master-data counts.
+
+**Architecture:** The dashboard fetches all orders + master-data summaries in a **single** `GET /api/dashboard` request on mount. Per-card filtering happens entirely client-side via `client/src/utils/dashboardAggregations.js`, so filter interactions are instant with no extra network round-trips. This avoids Render free-tier cold-start delays on every filter change.
 
 ### 2. Orders List Page
 - Searchable, sortable, filterable table of all orders
@@ -183,12 +204,13 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 ### Frontend Structure
 ```
 src/
-  components/       # Reusable UI components (StatusBadge, StockBadge, KpiCard, ProtectedRoute, etc.)
+  components/       # Reusable UI components (StatusBadge, StockBadge, KpiCard, ProtectedRoute,
+                    #   SearchableDropdown, TimePresetPicker, CardFilterModal, FilterableCard, BillModal, etc.)
   context/          # React contexts (AuthContext)
   pages/            # Dashboard, Orders, OrderDetail, Inventory, ProductDetail, Customers, CustomerDetail, Insights, Login, Profile
-  hooks/            # Custom hooks (useOrders, useDashboard, useCustomers, useInventory, useInsights)
+  hooks/            # Custom hooks (useOrders, useDashboard, useCustomers, useInventory, useInsights, useCardFilters)
   services/         # API client functions (includes auth: login, logout, fetchProfile, updateProfile)
-  utils/            # Formatters, helpers
+  utils/            # Formatters, helpers, dashboardAggregations (client-side dashboard filtering/aggregation)
   App.jsx
   main.jsx
 ```
@@ -212,7 +234,7 @@ server/
 - `POST /api/orders` — Add a new order (auto-sets status to Pending, logs audit entry)
 - `GET /api/orders/:rowIndex/audit` — Fetch audit history (status changes) for an order
 - `PATCH /api/orders/:rowIndex` — Update order status (logs audit entry with previous/new status)
-- `GET /api/dashboard` — Aggregated stats for dashboard
+- `GET /api/dashboard` — Returns raw orders (trimmed) + customer/inventory summary KPIs. No query params; per-card filtering is client-side.
 - `GET /api/insights` — All insights (order, customer, inventory)
 - `GET /api/customers` — Customer list (supports `?search=`, `?status=Active|Archived`, default Active)
 - `POST /api/customers` — Add a new customer (auto-generates Customer ID)

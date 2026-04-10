@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, RefreshCw, Eye, Plus, X, ChevronDown, SlidersHorizontal, MoreVertical, CheckCircle, FileText, Trash2 } from 'lucide-react';
+import { Search, RefreshCw, Eye, Plus, X, SlidersHorizontal, MoreVertical, CheckCircle, FileText, Trash2 } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 import StatusSelect from '../components/StatusSelect';
 import StatusBadge from '../components/StatusBadge';
@@ -11,50 +11,9 @@ import { fetchCustomers, fetchInventory, addOrder, addCustomer, addProduct } fro
 import { useCategories } from '../hooks/useCategories';
 import { useAuth } from '../context/AuthContext';
 import BillModal from '../components/BillModal';
+import SearchableDropdown from '../components/SearchableDropdown';
 
 const BATCH_SIZE = 25;
-
-/* ─── SearchableDropdown (for Add Order modal) ─── */
-function SearchableDropdown({ label, placeholder, items, displayFn, onSelect, onAddNew, addNewLabel }) {
-  const [search, setSearch] = useState('');
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const filtered = items.filter(item => displayFn(item).toLowerCase().includes(search.toLowerCase()));
-
-  return (
-    <div ref={ref} className="relative">
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <div className="relative">
-        <input type="text" value={search} onChange={e => { setSearch(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)} placeholder={placeholder}
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 pr-8" />
-        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-      </div>
-      {open && (
-        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-          {filtered.map((item, i) => (
-            <button key={i} type="button" onClick={() => { onSelect(item); setSearch(displayFn(item)); setOpen(false); }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-terracotta-50 transition-colors">{displayFn(item)}</button>
-          ))}
-          {filtered.length === 0 && <p className="px-3 py-2 text-sm text-gray-400">No results</p>}
-          {onAddNew && (
-            <button type="button" onClick={() => { onAddNew(); setOpen(false); }}
-              className="w-full text-left px-3 py-2 text-sm text-terracotta-600 font-medium hover:bg-terracotta-50 border-t border-gray-100">
-              + {addNewLabel}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ─── CardActionMenu (mobile ⋮ menu) ─── */
 function CardActionMenu({ order, onStatusChange, onGenerateBill }) {
