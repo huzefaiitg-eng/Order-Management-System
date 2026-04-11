@@ -258,7 +258,9 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
                         </div>
                         <div className="flex-1">
                           <label className="block text-xs text-gray-500 mb-1">Selling Price</label>
-                          <input type="number" value={line.unitSellingPrice} onChange={e => updateProductLine(idx, 'unitSellingPrice', parseFloat(e.target.value) || 0)} className={inputClass} />
+                          <div className="w-full px-3 py-2 text-sm border border-gray-200 bg-gray-50 rounded-lg text-gray-700">
+                            {line.productName ? formatCurrency(line.unitSellingPrice) : '—'}
+                          </div>
                         </div>
                       </div>
                     </>

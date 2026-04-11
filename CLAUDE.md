@@ -114,7 +114,8 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 - Profit column (Price Paid - Product Cost) with color coding (green for profit, red for loss)
 - Orders enriched with customer data from Customers master and product data from Inventory master
 - **Add Order** button — opens modal form to manually create an order:
-  - Date (default today DD/MM/YYYY), Source (dropdown including "Manual"), Customer (searchable from active customers or add new inline), Product (searchable from active inventory or add new inline), Payment mode, Quantity, Price
+  - Date (default today DD/MM/YYYY), Source (dropdown including "Manual"), Customer (searchable from active customers or add new inline), Product (searchable from active inventory or add new inline), Payment mode, Quantity
+  - **Selling price per line is read-only** — inventory selling price is the authoritative max. Users pick product + quantity only. Discounts happen at the order-level Discount field (not per line).
   - Default status: Pending
   - Logs initial audit entry on creation
 
@@ -153,6 +154,7 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 - Click "View" to open Product Detail page
 - **Add Product** button — opens modal form to add a new product (auto-generates Article ID)
 - **Archived** button — navigates to Archived Inventory page
+- **Mobile responsive**: Filter flap (category, sub-category) beside search, mobile-only sort dropdown (Name A–Z, Low/More stock first, Most/Least expensive), lazy loading (25 per batch), minimal mobile card layout showing name + article ID + stock badge + category + selling price/stock/sold KPIs.
 
 ### 6. Product Detail Page
 - Product header with name, description, article ID, category/sub-category badges, stock badge
@@ -174,6 +176,7 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 - Click "View" to open Customer Detail page
 - **Add Customer** button — opens modal form to add a new customer (auto-generates Customer ID)
 - **Archived** button — navigates to Archived Customers page
+- **Mobile responsive**: Filter flap with active-orders toggle and total-orders buckets (1, 2, 3, 4, 5, 5+) beside search, mobile-only sort dropdown (Total Orders high→low, Name A–Z, Name Z–A), lazy loading (25 per batch), minimal mobile card layout with avatar + name + phone + active badge + email/address + total-orders footer.
 
 ### 8. Customer Detail Page
 - Customer profile header with avatar, name, phone, email, address
