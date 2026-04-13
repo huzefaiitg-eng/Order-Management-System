@@ -71,39 +71,45 @@ export default function OrderDetail() {
         {/* Order Info */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 space-y-6">
           <div className="flex items-start justify-between">
-            <div>
+            <div className="min-w-0 flex-1">
+              {/* Invoice number as page title */}
+              <h1 className="text-xl font-bold text-gray-900">
+                {order.orderNumber || `Order #${order.rowIndex}`}
+              </h1>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Order from {order.orderFrom} on {order.orderDate}
+              </p>
+
+              {/* Product lines */}
               {order.productLines?.length > 1 ? (
-                <>
-                  <h1 className="text-xl font-bold text-gray-900">Multi-Product Order</h1>
-                  <div className="mt-2 space-y-2">
-                    {order.productLines.map((line, i) => (
-                      <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                        <div>
-                          <span className="text-sm font-medium text-gray-900">
-                            {line.articleId ? (
-                              <Link to={`/inventory/${encodeURIComponent(line.articleId)}`} className="hover:text-terracotta-600">{line.productName}</Link>
-                            ) : line.productName}
-                          </span>
-                          {line.category && <span className="ml-2 text-xs text-gray-500">{line.category}</span>}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          &times;{line.quantity} &middot; {formatCurrency(line.unitSellingPrice || line.unitCost)}/unit &middot; <span className="font-medium">{formatCurrency(line.sellingLineTotal || line.lineTotal)}</span>
-                        </div>
+                <div className="mt-3 space-y-2">
+                  {order.productLines.map((line, i) => (
+                    <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                      <div>
+                        <span className="text-sm font-medium text-gray-900">
+                          {line.articleId ? (
+                            <Link to={`/inventory/${encodeURIComponent(line.articleId)}`} className="hover:text-terracotta-600">{line.productName}</Link>
+                          ) : line.productName}
+                        </span>
+                        {line.category && <span className="ml-2 text-xs text-gray-500">{line.category}</span>}
                       </div>
-                    ))}
-                  </div>
-                </>
+                      <div className="text-sm text-gray-600">
+                        &times;{line.quantity} &middot; {formatCurrency(line.unitSellingPrice || line.unitCost)}/unit &middot; <span className="font-medium">{formatCurrency(line.sellingLineTotal || line.lineTotal)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <>
-                  <h1 className="text-xl font-bold text-gray-900">
+                <div className="mt-3">
+                  <p className="text-sm font-medium text-gray-900">
                     {order.articleId ? (
                       <Link to={`/inventory/${encodeURIComponent(order.articleId)}`} className="hover:text-terracotta-600">
                         {order.productOrdered}
                       </Link>
                     ) : order.productOrdered}
-                  </h1>
+                  </p>
                   {order.productDescription && (
-                    <p className="text-sm text-gray-500 mt-0.5">{order.productDescription}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{order.productDescription}</p>
                   )}
                   {(order.category || order.subCategory) && (
                     <div className="flex gap-2 mt-2">
@@ -119,14 +125,10 @@ export default function OrderDetail() {
                       )}
                     </div>
                   )}
-                </>
+                </div>
               )}
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-sm text-gray-500">Order from {order.orderFrom} on {order.orderDate}</span>
-                {order.orderNumber && <span className="text-xs text-gray-400">({order.orderNumber})</span>}
-              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0 ml-4">
               <button onClick={() => setShowBill(true)} className="p-2 text-gray-400 hover:text-terracotta-600 hover:bg-terracotta-50 rounded-lg transition-colors" title="Generate Bill">
                 <FileText size={18} />
               </button>
