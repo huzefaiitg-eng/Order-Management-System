@@ -93,7 +93,7 @@ export default function ProductDetail() {
   if (!product) return null;
 
   return (
-    <DetailOverlay fallback="/inventory">
+    <DetailOverlay fallback="/inventory" title={product.productName}>
     <div className="p-6 space-y-6">
       {/* Product Header */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">

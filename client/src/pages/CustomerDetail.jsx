@@ -95,7 +95,7 @@ export default function CustomerDetail() {
   const pastOrders = customer.orders.filter(o => !activeStatuses.includes(o.orderStatus));
 
   return (
-    <DetailOverlay fallback="/customers">
+    <DetailOverlay fallback="/customers" title={customer.customerName}>
     <div className="p-6 space-y-6">
       {/* Customer Header */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">

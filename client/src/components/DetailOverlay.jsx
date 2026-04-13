@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { X } from 'lucide-react';
 
-export default function DetailOverlay({ fallback, children }) {
+export default function DetailOverlay({ fallback, title, children }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -29,12 +29,17 @@ export default function DetailOverlay({ fallback, children }) {
   }, [location.key]);
 
   return (
-    <div className="fixed inset-0 z-[55] bg-white flex flex-col animate-fade-in">
-      {/* Sticky close bar */}
-      <div className="flex items-center justify-end px-4 py-3 shrink-0 border-b border-gray-100">
+    <div className="fixed inset-0 z-[55] bg-white flex flex-col animate-slide-up">
+      {/* Sticky header bar */}
+      <div className="flex items-center justify-between px-4 md:px-6 py-3 shrink-0 border-b border-gray-100">
+        {title ? (
+          <h1 className="text-base font-semibold text-gray-900 truncate">{title}</h1>
+        ) : (
+          <div />
+        )}
         <button
           onClick={handleClose}
-          className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+          className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors shrink-0 ml-4"
           aria-label="Close"
         >
           <X size={20} />

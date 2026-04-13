@@ -66,7 +66,7 @@ export default function OrderDetail() {
     : [{ productName: order.productOrdered, articleId: order.articleId, category: order.category, quantity: order.quantityOrdered, unitCost: order.productCost, unitSellingPrice: order.pricePaid, lineTotal: order.productCost, sellingLineTotal: order.pricePaid }];
 
   return (
-    <DetailOverlay fallback="/orders">
+    <DetailOverlay fallback="/orders" title={order.orderNumber || `Order #${order.rowIndex}`}>
     <div className="p-6 space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Order Info */}
@@ -228,7 +228,13 @@ export default function OrderDetail() {
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             <h2 className="text-lg font-semibold text-gray-900">Customer</h2>
             <div>
-              <p className="font-medium text-gray-900">{order.customerName}</p>
+              {order.customerPhone ? (
+                <Link to={`/customers/${encodeURIComponent(order.customerPhone)}`} className="font-medium text-gray-900 hover:text-terracotta-600 transition-colors">
+                  {order.customerName}
+                </Link>
+              ) : (
+                <p className="font-medium text-gray-900">{order.customerName}</p>
+              )}
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Phone size={14} />
