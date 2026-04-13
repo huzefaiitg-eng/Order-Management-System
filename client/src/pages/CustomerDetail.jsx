@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, MapPin, Mail, ShoppingBag, IndianRupee, Zap, Pencil, X, Check, Archive } from 'lucide-react';
+import { Phone, MapPin, Mail, ShoppingBag, IndianRupee, Zap, Pencil, X, Check, Archive } from 'lucide-react';
 import { fetchCustomerByPhone, updateOrderStatus, updateCustomer, archiveCustomer } from '../services/api';
 import StatusBadge from '../components/StatusBadge';
 import StatusSelect from '../components/StatusSelect';
+import DetailOverlay from '../components/DetailOverlay';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 import { formatCurrency } from '../utils/formatters';
@@ -85,8 +86,8 @@ export default function CustomerDetail() {
     }
   };
 
-  if (loading) return <Loader />;
-  if (error) return <ErrorMessage message={error} />;
+  if (loading) return <DetailOverlay fallback="/customers"><Loader /></DetailOverlay>;
+  if (error) return <DetailOverlay fallback="/customers"><ErrorMessage message={error} /></DetailOverlay>;
   if (!customer) return null;
 
   const activeStatuses = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery'];
@@ -94,12 +95,8 @@ export default function CustomerDetail() {
   const pastOrders = customer.orders.filter(o => !activeStatuses.includes(o.orderStatus));
 
   return (
+    <DetailOverlay fallback="/customers">
     <div className="p-6 space-y-6">
-      <Link to="/customers" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
-        <ArrowLeft size={16} />
-        Back to Customers
-      </Link>
-
       {/* Customer Header */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-start gap-4">
@@ -273,5 +270,6 @@ export default function CustomerDetail() {
         )}
       </div>
     </div>
+    </DetailOverlay>
   );
 }

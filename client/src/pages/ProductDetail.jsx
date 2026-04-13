@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Package, ShoppingBag, IndianRupee, RotateCcw, TrendingUp, Pencil, X, Check, Archive } from 'lucide-react';
+import { Package, ShoppingBag, IndianRupee, RotateCcw, TrendingUp, Pencil, X, Check, Archive } from 'lucide-react';
 import { fetchProductByArticleId, updateProduct, archiveProduct } from '../services/api';
 import { formatCurrency, formatPercent } from '../utils/formatters';
 import { useCategories } from '../hooks/useCategories';
 import StockBadge from '../components/StockBadge';
 import StatusBadge from '../components/StatusBadge';
+import DetailOverlay from '../components/DetailOverlay';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -87,17 +88,13 @@ export default function ProductDetail() {
     }
   };
 
-  if (loading) return <Loader />;
-  if (error) return <ErrorMessage message={error} />;
+  if (loading) return <DetailOverlay fallback="/inventory"><Loader /></DetailOverlay>;
+  if (error) return <DetailOverlay fallback="/inventory"><ErrorMessage message={error} /></DetailOverlay>;
   if (!product) return null;
 
   return (
+    <DetailOverlay fallback="/inventory">
     <div className="p-6 space-y-6">
-      <Link to="/inventory" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
-        <ArrowLeft size={16} />
-        Back to Inventory
-      </Link>
-
       {/* Product Header */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-start gap-4">
@@ -275,5 +272,6 @@ export default function ProductDetail() {
         )}
       </div>
     </div>
+    </DetailOverlay>
   );
 }

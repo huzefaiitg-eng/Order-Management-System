@@ -537,9 +537,20 @@ export default function Orders() {
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-medium">{order.orderFrom}</span>
                       </td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{order.customerName}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {order.customerPhone ? (
+                          <Link to={`/customers/${encodeURIComponent(order.customerPhone)}`} className="hover:text-terracotta-600 transition-colors">{order.customerName}</Link>
+                        ) : order.customerName}
+                      </td>
                       <td className="px-4 py-3 text-gray-600">
-                        {order.productLines?.[0]?.productName || order.productOrdered}
+                        {(() => {
+                          const fl = order.productLines?.[0];
+                          const name = fl?.productName || order.productOrdered;
+                          const aid = fl?.articleId || order.articleId;
+                          return aid ? (
+                            <Link to={`/inventory/${encodeURIComponent(aid)}`} className="hover:text-terracotta-600 transition-colors">{name}</Link>
+                          ) : name;
+                        })()}
                         {order.productLines?.length > 1 && <span className="ml-1 text-xs text-terracotta-600 font-medium">(+{order.productLines.length - 1} more)</span>}
                       </td>
                       <td className="px-4 py-3 text-center text-gray-600">{order.quantityOrdered}</td>

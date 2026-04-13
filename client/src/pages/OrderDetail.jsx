@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Phone, MapPin, Package, CreditCard, Clock, FileText } from 'lucide-react';
+import { Phone, MapPin, Package, CreditCard, Clock, FileText } from 'lucide-react';
 import { fetchOrders, updateOrderStatus, fetchOrderAudit } from '../services/api';
 import StatusBadge from '../components/StatusBadge';
 import StatusSelect from '../components/StatusSelect';
+import DetailOverlay from '../components/DetailOverlay';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 import { formatCurrency, ORDER_STATUSES, STATUS_COLORS } from '../utils/formatters';
@@ -54,19 +55,19 @@ export default function OrderDetail() {
     fetchOrderAudit(parseInt(rowIndex)).then(setAuditHistory).catch(() => {});
   };
 
-  if (loading) return <Loader />;
-  if (error) return <ErrorMessage message={error} />;
+  if (loading) return <DetailOverlay fallback="/orders"><Loader /></DetailOverlay>;
+  if (error) return <DetailOverlay fallback="/orders"><ErrorMessage message={error} /></DetailOverlay>;
   if (!order) return null;
 
   const currentStatusIndex = STATUS_FLOW.indexOf(order.orderStatus);
 
-  return (
-    <div className="p-6 space-y-6">
-      <Link to="/orders" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
-        <ArrowLeft size={16} />
-        Back to Orders
-      </Link>
+  const productLines = order.productLines?.length > 0
+    ? order.productLines
+    : [{ productName: order.productOrdered, articleId: order.articleId, category: order.category, quantity: order.quantityOrdered, unitCost: order.productCost, unitSellingPrice: order.pricePaid, lineTotal: order.productCost, sellingLineTotal: order.pricePaid }];
 
+  return (
+    <DetailOverlay fallback="/orders">
+    <div className="p-6 space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Order Info */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 space-y-6">
@@ -80,53 +81,24 @@ export default function OrderDetail() {
                 Order from {order.orderFrom} on {order.orderDate}
               </p>
 
-              {/* Product lines */}
-              {order.productLines?.length > 1 ? (
-                <div className="mt-3 space-y-2">
-                  {order.productLines.map((line, i) => (
-                    <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                      <div>
-                        <span className="text-sm font-medium text-gray-900">
-                          {line.articleId ? (
-                            <Link to={`/inventory/${encodeURIComponent(line.articleId)}`} className="hover:text-terracotta-600">{line.productName}</Link>
-                          ) : line.productName}
-                        </span>
-                        {line.category && <span className="ml-2 text-xs text-gray-500">{line.category}</span>}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        &times;{line.quantity} &middot; {formatCurrency(line.unitSellingPrice || line.unitCost)}/unit &middot; <span className="font-medium">{formatCurrency(line.sellingLineTotal || line.lineTotal)}</span>
-                      </div>
+              {/* Product lines — unified layout */}
+              <div className="mt-3 space-y-2">
+                {productLines.map((line, i) => (
+                  <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                    <div>
+                      <span className="text-sm font-medium text-gray-900">
+                        {line.articleId ? (
+                          <Link to={`/inventory/${encodeURIComponent(line.articleId)}`} className="hover:text-terracotta-600">{line.productName}</Link>
+                        ) : line.productName}
+                      </span>
+                      {line.category && <span className="ml-2 text-xs text-gray-500">{line.category}</span>}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-3">
-                  <p className="text-sm font-medium text-gray-900">
-                    {order.articleId ? (
-                      <Link to={`/inventory/${encodeURIComponent(order.articleId)}`} className="hover:text-terracotta-600">
-                        {order.productOrdered}
-                      </Link>
-                    ) : order.productOrdered}
-                  </p>
-                  {order.productDescription && (
-                    <p className="text-xs text-gray-400 mt-0.5">{order.productDescription}</p>
-                  )}
-                  {(order.category || order.subCategory) && (
-                    <div className="flex gap-2 mt-2">
-                      {order.category && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-terracotta-100 text-terracotta-800">
-                          {order.category}
-                        </span>
-                      )}
-                      {order.subCategory && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                          {order.subCategory}
-                        </span>
-                      )}
+                    <div className="text-sm text-gray-600">
+                      &times;{line.quantity} &middot; {formatCurrency(line.unitSellingPrice || line.unitCost)}/unit &middot; <span className="font-medium">{formatCurrency(line.sellingLineTotal || line.lineTotal)}</span>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-4">
               <button onClick={() => setShowBill(true)} className="p-2 text-gray-400 hover:text-terracotta-600 hover:bg-terracotta-50 rounded-lg transition-colors" title="Generate Bill">
@@ -176,7 +148,7 @@ export default function OrderDetail() {
             <div className="flex items-center gap-3">
               <Package size={18} className="text-gray-400" />
               <div>
-                <p className="text-xs text-gray-500">{order.productLines?.length > 1 ? 'Total Cost' : 'Product Cost'}</p>
+                <p className="text-xs text-gray-500">Total Cost</p>
                 <p className="text-sm font-medium text-gray-900">{formatCurrency(order.productCost)}</p>
               </div>
             </div>
@@ -299,5 +271,6 @@ export default function OrderDetail() {
 
       {showBill && <BillModal order={order} onClose={() => setShowBill(false)} />}
     </div>
+    </DetailOverlay>
   );
 }
