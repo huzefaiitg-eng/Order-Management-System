@@ -104,186 +104,197 @@ export default function ProductDetail() {
 
   return (
     <DetailOverlay fallback="/inventory" title={product.productName}>
-    <div className="p-6 space-y-6">
-      {/* Product Image Gallery */}
-      {!editing && (
-        <ProductImage productImages={product.productImages} productName={product.productName} variant="gallery" iconSize={40} />
-      )}
+    <div className="p-4 md:p-6 space-y-5">
 
-      {/* Product Header */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div>
-          <div className="flex-1">
-            {editing ? (
-              <div className="space-y-3">
-                {editError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{editError}</p>}
+      {/* ─── Edit Mode ─── */}
+      {editing ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-6 space-y-4">
+          {editError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{editError}</p>}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Product Name</label>
+              <input type="text" value={editForm.productName} onChange={e => setEditForm({ ...editForm, productName: e.target.value })}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-full" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Category</label>
+                <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value, subCategory: '' })}
+                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Sub Category</label>
+                <select value={editForm.subCategory} onChange={e => setEditForm({ ...editForm, subCategory: e.target.value })}
+                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
+                  <option value="">Select</option>
+                  {(categorySubCategories[editForm.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3 max-w-sm">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Cost Price</label>
+              <input type="number" min="0" step="0.01" value={editForm.productCost} onChange={e => setEditForm({ ...editForm, productCost: e.target.value })}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Selling Price</label>
+              <input type="number" min="0" step="0.01" value={editForm.sellingPrice} onChange={e => setEditForm({ ...editForm, sellingPrice: e.target.value })}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Instock Qty</label>
+              <input type="number" min="0" value={editForm.instockQuantity} onChange={e => setEditForm({ ...editForm, instockQuantity: e.target.value })}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
+            </div>
+          </div>
+          <ImageUpload images={editForm.imageUrls} onChange={(urls) => setEditForm({ ...editForm, imageUrls: urls })} />
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
+              <Check size={14} />{saving ? 'Saving...' : 'Save'}
+            </button>
+            <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+              <X size={14} />Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* ─── View Mode: Gallery left + Details right on desktop ─── */
+        <div className="flex flex-col md:flex-row gap-5">
+          {/* Left — Image Gallery */}
+          <div className="w-full md:w-1/2 md:sticky md:top-20 md:self-start">
+            <ProductImage productImages={product.productImages} productName={product.productName} variant="gallery" iconSize={40} />
+          </div>
+
+          {/* Right — Product Info */}
+          <div className="w-full md:w-1/2 space-y-4">
+            {/* Name + actions */}
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl md:text-2xl font-bold text-gray-900">{product.productName}</h1>
+                <button onClick={startEditing} className="text-gray-400 hover:text-terracotta-600 transition-colors" title="Edit product">
+                  <Pencil size={16} />
+                </button>
+                <button onClick={handleArchive} disabled={archiving} className="text-gray-400 hover:text-amber-600 transition-colors disabled:opacity-50" title="Archive product">
+                  <Archive size={16} />
+                </button>
+              </div>
+              <p className="text-xs font-mono text-gray-400 mt-0.5">{product.articleId}</p>
+            </div>
+
+            {/* Badges */}
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-terracotta-100 text-terracotta-800">
+                {product.category}
+              </span>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                {product.subCategory}
+              </span>
+              <StockBadge quantity={product.availableQuantity} />
+            </div>
+
+            {/* Description */}
+            {product.productDescription && (
+              <p className="text-sm text-gray-600 leading-relaxed">{product.productDescription}</p>
+            )}
+
+            {/* Price highlight */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-baseline gap-3">
+                <span className="text-2xl font-bold text-gray-900">{formatCurrency(product.sellingPrice)}</span>
+                <span className="text-sm text-gray-400 line-through">{formatCurrency(product.productCost)}</span>
+                {product.sellingPrice > product.productCost && (
+                  <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                    {formatPercent(((product.sellingPrice - product.productCost) / product.productCost) * 100)} margin
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <Package size={18} className="text-blue-600 shrink-0" />
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Product Name</label>
-                  <input type="text" value={editForm.productName} onChange={e => setEditForm({ ...editForm, productName: e.target.value })}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-full max-w-sm" />
-                </div>
-                <div className="flex gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Category</label>
-                    <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value, subCategory: '' })}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
-                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Sub Category</label>
-                    <select value={editForm.subCategory} onChange={e => setEditForm({ ...editForm, subCategory: e.target.value })}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
-                      <option value="">Select</option>
-                      {(categorySubCategories[editForm.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Cost Price</label>
-                    <input type="number" min="0" step="0.01" value={editForm.productCost} onChange={e => setEditForm({ ...editForm, productCost: e.target.value })}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-32" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Selling Price</label>
-                    <input type="number" min="0" step="0.01" value={editForm.sellingPrice} onChange={e => setEditForm({ ...editForm, sellingPrice: e.target.value })}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-32" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Instock Qty</label>
-                    <input type="number" min="0" value={editForm.instockQuantity} onChange={e => setEditForm({ ...editForm, instockQuantity: e.target.value })}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-32" />
-                  </div>
-                </div>
-                <ImageUpload images={editForm.imageUrls} onChange={(urls) => setEditForm({ ...editForm, imageUrls: urls })} />
-                <div className="flex gap-2 pt-1">
-                  <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
-                    <Check size={14} />{saving ? 'Saving...' : 'Save'}
-                  </button>
-                  <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
-                    <X size={14} />Cancel
-                  </button>
+                  <p className="text-xs text-gray-500">In Stock</p>
+                  <p className="text-lg font-bold text-gray-900">{product.instockQuantity}</p>
                 </div>
               </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-xl font-bold text-gray-900">{product.productName}</h1>
-                  <span className="text-xs font-mono text-gray-400">{product.articleId}</span>
-                  <button onClick={startEditing} className="text-gray-400 hover:text-terracotta-600 transition-colors" title="Edit product">
-                    <Pencil size={16} />
-                  </button>
-                  <button onClick={handleArchive} disabled={archiving} className="text-gray-400 hover:text-amber-600 transition-colors disabled:opacity-50" title="Archive product">
-                    <Archive size={16} />
-                  </button>
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <ShoppingBag size={18} className="text-terracotta-600 shrink-0" />
+                <div>
+                  <p className="text-xs text-gray-500">Total Orders</p>
+                  <p className="text-lg font-bold text-gray-900">{product.totalOrders}</p>
                 </div>
-                <p className="text-sm text-gray-600 mt-1">{product.productDescription}</p>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-terracotta-100 text-terracotta-800">
-                    {product.category}
-                  </span>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                    {product.subCategory}
-                  </span>
-                  <StockBadge quantity={product.availableQuantity} />
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <TrendingUp size={18} className="text-green-600 shrink-0" />
+                <div>
+                  <p className="text-xs text-gray-500">Revenue</p>
+                  <p className="text-lg font-bold text-gray-900">{formatCurrency(product.totalRevenue)}</p>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-6 gap-4 mt-6">
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <IndianRupee size={18} className="text-gray-600" />
-            <div>
-              <p className="text-xs text-gray-500">Cost Price</p>
-              <p className="text-lg font-bold text-gray-900">{formatCurrency(product.productCost)}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <IndianRupee size={18} className="text-terracotta-600" />
-            <div>
-              <p className="text-xs text-gray-500">Selling Price</p>
-              <p className="text-lg font-bold text-gray-900">{formatCurrency(product.sellingPrice)}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <Package size={18} className="text-blue-600" />
-            <div>
-              <p className="text-xs text-gray-500">In Stock</p>
-              <p className="text-lg font-bold text-gray-900">{product.instockQuantity}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <ShoppingBag size={18} className="text-terracotta-600" />
-            <div>
-              <p className="text-xs text-gray-500">Total Orders</p>
-              <p className="text-lg font-bold text-gray-900">{product.totalOrders}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <TrendingUp size={18} className="text-green-600" />
-            <div>
-              <p className="text-xs text-gray-500">Revenue</p>
-              <p className="text-lg font-bold text-gray-900">{formatCurrency(product.totalRevenue)}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <RotateCcw size={18} className="text-red-600" />
-            <div>
-              <p className="text-xs text-gray-500">Return Rate</p>
-              <p className="text-lg font-bold text-gray-900">{formatPercent(product.returnRate * 100)}</p>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <RotateCcw size={18} className="text-red-600 shrink-0" />
+                <div>
+                  <p className="text-xs text-gray-500">Return Rate</p>
+                  <p className="text-lg font-bold text-gray-900">{formatPercent(product.returnRate * 100)}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Orders Table */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">
-          Order History ({product.orders.length})
-        </h2>
-        {product.orders.length === 0 ? (
-          <p className="text-sm text-gray-500">No orders for this product yet</p>
-        ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Date</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Customer</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Source</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Price</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Profit</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {product.orders.map(order => (
-                    <tr key={order.rowIndex} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-600">{order.orderDate}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{order.customerName}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-medium">
-                          {order.orderFrom}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(order.pricePaid)}</td>
-                      <td className={`px-4 py-3 font-medium ${order.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(order.profit)}
-                      </td>
-                      <td className="px-4 py-3"><StatusBadge status={order.orderStatus} /></td>
+      {/* ─── Orders Table ─── */}
+      {!editing && (
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">
+            Order History ({product.orders.length})
+          </h2>
+          {product.orders.length === 0 ? (
+            <p className="text-sm text-gray-500">No orders for this product yet</p>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 py-3 text-left font-medium text-gray-600">Date</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-600">Customer</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-600">Source</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-600">Price</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-600">Profit</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {product.orders.map(order => (
+                      <tr key={order.rowIndex} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-gray-600">{order.orderDate}</td>
+                        <td className="px-4 py-3 font-medium text-gray-900">{order.customerName}</td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-medium">
+                            {order.orderFrom}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(order.pricePaid)}</td>
+                        <td className={`px-4 py-3 font-medium ${order.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency(order.profit)}
+                        </td>
+                        <td className="px-4 py-3"><StatusBadge status={order.orderStatus} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
     </DetailOverlay>
   );
