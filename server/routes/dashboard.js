@@ -52,13 +52,23 @@ router.get('/', async (req, res) => {
     );
     const newCustomers7d = recentPhones.size;
 
-    // Inventory KPIs (always full dataset)
-    const outOfStockCount = inventory.filter(
-      p => p.status !== 'Archived' && p.instockQuantity === 0
-    ).length;
-    const lowStockCount = inventory.filter(
-      p => p.status !== 'Archived' && p.availableQuantity > 0 && p.availableQuantity < 5
-    ).length;
+    // Inventory KPIs (always full dataset) — compute dynamic available quantities
+    const ACTIVE_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery'];
+    const activeQtyByProduct = {};
+    orders.forEach(o => {
+      const name = o.productOrdered;
+      if (!name) return;
+      if (ACTIVE_STATUSES.includes(o.orderStatus)) {
+        activeQtyByProduct[name] = (activeQtyByProduct[name] || 0) + (o.quantityOrdered || 1);
+      }
+    });
+
+    const activeInventory = inventory.filter(p => p.status !== 'Archived').map(p => ({
+      ...p,
+      availableQuantity: p.instockQuantity - (activeQtyByProduct[p.productName] || 0),
+    }));
+    const outOfStockCount = activeInventory.filter(p => p.instockQuantity === 0).length;
+    const lowStockCount = activeInventory.filter(p => p.availableQuantity > 0 && p.availableQuantity < 5).length;
 
     res.json({
       success: true,

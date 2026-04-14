@@ -81,11 +81,27 @@ router.get('/', async (req, res) => {
       .filter(c => c.returnRate > 0.3)
       .sort((a, b) => b.returnRate - a.returnRate);
 
-    const lowStockAlerts = inventory
+    // Compute dynamic available quantities from live orders
+    const activeQtyByProduct = {};
+    orders.forEach(o => {
+      const name = o.productOrdered;
+      if (!name) return;
+      if (activeStatuses.includes(o.orderStatus)) {
+        activeQtyByProduct[name] = (activeQtyByProduct[name] || 0) + (o.quantityOrdered || 1);
+      }
+    });
+
+    const enrichedInventory = inventory.map(p => ({
+      ...p,
+      quantityInActiveOrders: activeQtyByProduct[p.productName] || 0,
+      availableQuantity: p.instockQuantity - (activeQtyByProduct[p.productName] || 0),
+    }));
+
+    const lowStockAlerts = enrichedInventory
       .filter(p => p.instockQuantity > 0 && p.availableQuantity < LOW_STOCK_THRESHOLD)
       .map(p => ({ articleId: p.articleId, productName: p.productName, category: p.category, instockQuantity: p.instockQuantity, availableQuantity: p.availableQuantity }));
 
-    const outOfStockProducts = inventory
+    const outOfStockProducts = enrichedInventory
       .filter(p => p.instockQuantity === 0)
       .map(p => ({ articleId: p.articleId, productName: p.productName, category: p.category, subCategory: p.subCategory }));
 
@@ -99,14 +115,14 @@ router.get('/', async (req, res) => {
     });
 
     const productLookup = {};
-    inventory.forEach(p => { productLookup[p.productName] = p; });
+    enrichedInventory.forEach(p => { productLookup[p.productName] = p; });
 
     const bestSellingProducts = Object.entries(productOrderStats)
       .map(([name, stats]) => ({ productName: name, articleId: productLookup[name]?.articleId || '', orderCount: stats.totalOrders, totalRevenue: stats.totalRevenue, instockQuantity: productLookup[name]?.instockQuantity ?? 0 }))
       .sort((a, b) => b.orderCount - a.orderCount)
       .slice(0, 10);
 
-    const slowMovingInventory = inventory
+    const slowMovingInventory = enrichedInventory
       .filter(p => p.instockQuantity > 10)
       .map(p => ({ articleId: p.articleId, productName: p.productName, category: p.category, instockQuantity: p.instockQuantity, orderCount: productOrderStats[p.productName]?.totalOrders || 0 }))
       .filter(p => p.orderCount < 2)
