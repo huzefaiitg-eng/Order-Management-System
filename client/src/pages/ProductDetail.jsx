@@ -201,13 +201,19 @@ export default function ProductDetail() {
               <p className="text-sm text-gray-600 leading-relaxed">{product.productDescription}</p>
             )}
 
-            {/* Price highlight */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-baseline gap-3">
-                <span className="text-2xl font-bold text-gray-900">{formatCurrency(product.sellingPrice)}</span>
-                <span className="text-sm text-gray-400 line-through">{formatCurrency(product.productCost)}</span>
+            {/* Price card */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">Selling Price</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(product.sellingPrice)}</p>
+                </div>
+                <div className="border-l border-gray-200 pl-4">
+                  <p className="text-xs text-gray-500 font-medium">Cost Price</p>
+                  <p className="text-lg font-semibold text-gray-600">{formatCurrency(product.productCost)}</p>
+                </div>
                 {product.sellingPrice > product.productCost && (
-                  <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                  <span className="text-xs font-medium text-green-700 bg-green-50 px-2.5 py-1 rounded-full self-center ml-auto">
                     {formatPercent(((product.sellingPrice - product.productCost) / product.productCost) * 100)} margin
                   </span>
                 )}
