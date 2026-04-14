@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Package, ShoppingBag, IndianRupee, RotateCcw, TrendingUp, Pencil, X, Check, Archive } from 'lucide-react';
+import ImageUpload from '../components/ImageUpload';
 import { fetchProductByArticleId, updateProduct, archiveProduct } from '../services/api';
 import { formatCurrency, formatPercent } from '../utils/formatters';
 import { useCategories } from '../hooks/useCategories';
@@ -54,6 +55,7 @@ export default function ProductDetail() {
       productCost: product.productCost,
       sellingPrice: product.sellingPrice,
       instockQuantity: product.instockQuantity,
+      imageUrls: product.productImages ? product.productImages.split(',').map(u => u.trim()).filter(Boolean) : [],
     });
     setEditing(true);
     setEditError('');
@@ -67,19 +69,26 @@ export default function ProductDetail() {
     setSaving(true);
     setEditError('');
     try {
+      const productImages = editForm.imageUrls.join(',');
       await updateProduct(articleId, {
-        ...editForm,
+        productName: editForm.productName,
+        category: editForm.category,
+        subCategory: editForm.subCategory,
         productCost: parseFloat(editForm.productCost),
         sellingPrice: parseFloat(editForm.sellingPrice),
         instockQuantity: parseInt(editForm.instockQuantity),
+        productImages,
       });
       setProduct(prev => ({
         ...prev,
-        ...editForm,
+        productName: editForm.productName,
+        category: editForm.category,
+        subCategory: editForm.subCategory,
         productCost: parseFloat(editForm.productCost),
         sellingPrice: parseFloat(editForm.sellingPrice),
         instockQuantity: parseInt(editForm.instockQuantity),
         availableQuantity: parseInt(editForm.instockQuantity) - prev.quantityInActiveOrders,
+        productImages,
       }));
       setEditing(false);
     } catch (err) {
@@ -96,10 +105,14 @@ export default function ProductDetail() {
   return (
     <DetailOverlay fallback="/inventory" title={product.productName}>
     <div className="p-6 space-y-6">
+      {/* Product Image Gallery */}
+      {!editing && (
+        <ProductImage productImages={product.productImages} productName={product.productName} variant="gallery" iconSize={40} />
+      )}
+
       {/* Product Header */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-start gap-4">
-          <ProductImage productImages={product.productImages} productName={product.productName} variant="detail" iconSize={24} />
+        <div>
           <div className="flex-1">
             {editing ? (
               <div className="space-y-3">
@@ -143,6 +156,7 @@ export default function ProductDetail() {
                       className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-32" />
                   </div>
                 </div>
+                <ImageUpload images={editForm.imageUrls} onChange={(urls) => setEditForm({ ...editForm, imageUrls: urls })} />
                 <div className="flex gap-2 pt-1">
                   <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
                     <Check size={14} />{saving ? 'Saving...' : 'Save'}

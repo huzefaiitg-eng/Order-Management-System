@@ -191,6 +191,25 @@ export function deleteProduct(articleId) {
   return request(`/inventory/${encodeURIComponent(articleId)}`, { method: 'DELETE' });
 }
 
+// Upload
+export async function uploadImage(file) {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append('image', file);
+  const res = await fetch(`${BASE_URL}/upload`, {
+    method: 'POST',
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (res.status === 401) {
+    localStorage.removeItem(TOKEN_KEY);
+    throw new Error('Session expired. Please log in again.');
+  }
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Upload failed');
+  return data.data.url;
+}
+
 // Settings — Categories
 export function fetchCategories() {
   return request('/settings/categories');

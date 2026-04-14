@@ -9,6 +9,7 @@ const dashboardRouter = require('./routes/dashboard');
 const insightsRouter = require('./routes/insights');
 const customersRouter = require('./routes/customers');
 const inventoryRouter = require('./routes/inventory');
+const uploadRouter = require('./routes/upload');
 const settingsRouter = require('./routes/settings');
 
 const app = express();
@@ -35,6 +36,7 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/insights', insightsRouter);
 app.use('/api/customers', customersRouter);
 app.use('/api/inventory', inventoryRouter);
+app.use('/api/upload', uploadRouter);
 app.use('/api/settings/categories', settingsRouter);
 
 app.get('/api/debug/sheets', async (req, res) => {
