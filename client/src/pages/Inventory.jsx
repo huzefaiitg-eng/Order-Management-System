@@ -6,23 +6,26 @@ import { fetchInventorySummary, addProduct, archiveProduct } from '../services/a
 import { formatCurrency } from '../utils/formatters';
 import { useCategories } from '../hooks/useCategories';
 import StockBadge from '../components/StockBadge';
+import ProductImage from '../components/ProductImage';
 import KpiCard from '../components/KpiCard';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 
 const BATCH_SIZE = 25;
 
-const MOBILE_SORT_OPTIONS = [
-  { key: 'name_asc',   label: 'Name: A–Z',          sortField: 'productName',       sortDir: 'asc' },
-  { key: 'low_stock',  label: 'Low stock first',    sortField: 'availableQuantity', sortDir: 'asc' },
-  { key: 'more_stock', label: 'More stock first',   sortField: 'availableQuantity', sortDir: 'desc' },
-  { key: 'expensive',  label: 'Most expensive',     sortField: 'sellingPrice',      sortDir: 'desc' },
-  { key: 'cheap',      label: 'Least expensive',    sortField: 'sellingPrice',      sortDir: 'asc' },
+const SORT_OPTIONS = [
+  { key: 'name_asc',    label: 'Name: A–Z',           sortField: 'productName',       sortDir: 'asc' },
+  { key: 'name_desc',   label: 'Name: Z–A',           sortField: 'productName',       sortDir: 'desc' },
+  { key: 'low_stock',   label: 'Low stock first',     sortField: 'availableQuantity', sortDir: 'asc' },
+  { key: 'more_stock',  label: 'More stock first',    sortField: 'availableQuantity', sortDir: 'desc' },
+  { key: 'expensive',   label: 'Price: High to low',  sortField: 'sellingPrice',      sortDir: 'desc' },
+  { key: 'cheap',       label: 'Price: Low to high',  sortField: 'sellingPrice',      sortDir: 'asc' },
+  { key: 'most_sold',   label: 'Most sold',           sortField: 'totalOrders',       sortDir: 'desc' },
 ];
 
 function AddProductModal({ onClose, onAdded, categories, categorySubCategories }) {
   const [form, setForm] = useState({
-    productName: '', category: '', subCategory: '', productCost: '', sellingPrice: '', instockQuantity: '', productDescription: '',
+    productName: '', category: '', subCategory: '', productCost: '', sellingPrice: '', instockQuantity: '', productDescription: '', productImages: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -105,6 +108,11 @@ function AddProductModal({ onClose, onAdded, categories, categorySubCategories }
             <input type="text" value={form.productDescription} onChange={e => setForm({ ...form, productDescription: e.target.value })}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="Product description (optional)" />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Image URL(s)</label>
+            <input type="text" value={form.productImages} onChange={e => setForm({ ...form, productImages: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="Paste image URL (comma-separated for multiple)" />
+          </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={saving} className="flex-1 px-4 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
@@ -140,7 +148,7 @@ export default function Inventory() {
   // Sort state (desktop clicks columns; mobile dropdown writes here too)
   const [sortField, setSortField] = useState('productName');
   const [sortDir, setSortDir] = useState('asc');
-  const [mobileSort, setMobileSort] = useState('name_asc');
+  const [activeSort, setActiveSort] = useState('name_asc');
   const [sortOpen, setSortOpen] = useState(false);
   const sortMenuRef = useRef(null);
 
@@ -198,19 +206,10 @@ export default function Inventory() {
     setFilters({ search, category: nc, subCategory: ns });
   };
 
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDir('asc');
-    }
-  };
-
-  const handleMobileSort = (key) => {
-    const opt = MOBILE_SORT_OPTIONS.find(o => o.key === key);
+  const handleSortSelect = (key) => {
+    const opt = SORT_OPTIONS.find(o => o.key === key);
     if (!opt) return;
-    setMobileSort(key);
+    setActiveSort(key);
     setSortField(opt.sortField);
     setSortDir(opt.sortDir);
     setSortOpen(false);
@@ -341,17 +340,18 @@ export default function Inventory() {
             <span className="bg-terracotta-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>
           )}
         </button>
-        {/* Mobile-only sort */}
-        <div className="md:hidden relative" ref={sortMenuRef}>
+        {/* Sort dropdown */}
+        <div className="relative" ref={sortMenuRef}>
           <button onClick={() => setSortOpen(o => !o)}
             className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shrink-0">
             <ArrowUpDown size={16} />
+            <span className="hidden sm:inline">Sort</span>
           </button>
           {sortOpen && (
             <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 w-52 py-1">
-              {MOBILE_SORT_OPTIONS.map(opt => (
-                <button key={opt.key} onClick={() => handleMobileSort(opt.key)}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${mobileSort === opt.key ? 'text-terracotta-600 font-medium' : 'text-gray-700'}`}>
+              {SORT_OPTIONS.map(opt => (
+                <button key={opt.key} onClick={() => handleSortSelect(opt.key)}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${activeSort === opt.key ? 'text-terracotta-600 font-medium' : 'text-gray-700'}`}>
                   {opt.label}
                 </button>
               ))}
@@ -381,123 +381,53 @@ export default function Inventory() {
 
       {!loading && !error && (
         <>
-          {/* ─── Desktop Table ─── */}
-          <div className="hidden md:block bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    {[
-                      { key: 'articleId', label: 'Article ID' },
-                      { key: 'productName', label: 'Product Name' },
-                      { key: 'category', label: 'Category' },
-                      { key: 'subCategory', label: 'Sub Category' },
-                      { key: 'productCost', label: 'Cost' },
-                      { key: 'sellingPrice', label: 'Selling Price' },
-                      { key: 'instockQuantity', label: 'In Stock' },
-                      { key: 'quantityInActiveOrders', label: 'Active Orders' },
-                      { key: 'availableQuantity', label: 'Available' },
-                      { key: 'totalOrders', label: 'Total Sold' },
-                      { key: null, label: '' },
-                    ].map(col => (
-                      <th
-                        key={col.label || 'actions'}
-                        onClick={() => col.key && handleSort(col.key)}
-                        className={`px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap ${col.key ? 'cursor-pointer hover:text-gray-900' : ''}`}
-                      >
-                        {col.label}
-                        {sortField === col.key && (sortDir === 'asc' ? ' \u2191' : ' \u2193')}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {visibleProducts.map((product) => (
-                    <tr key={product.articleId} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">{product.articleId}</td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <span className="font-medium text-gray-900">{product.productName}</span>
-                          <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{product.productDescription}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-terracotta-50 text-terracotta-700 text-xs font-medium">
-                          {product.category}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 text-xs">{product.subCategory}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(product.productCost)}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(product.sellingPrice)}</td>
-                      <td className="px-4 py-3 text-center font-medium">{product.instockQuantity}</td>
-                      <td className="px-4 py-3 text-center">{product.quantityInActiveOrders}</td>
-                      <td className="px-4 py-3">
-                        <StockBadge quantity={product.availableQuantity} />
-                        <span className="ml-2 text-xs text-gray-500">{product.availableQuantity}</span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          {product.totalOrders}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <Link
-                            to={`/inventory/${encodeURIComponent(product.articleId)}`}
-                            className="text-sm text-terracotta-600 hover:text-terracotta-800 font-medium"
-                          >
-                            View
-                          </Link>
-                          <button
-                            onClick={(e) => handleArchive(e, product)}
-                            disabled={archiving === product.articleId}
-                            className="text-gray-400 hover:text-amber-600 transition-colors disabled:opacity-50"
-                            title="Archive product"
-                          >
-                            <Archive size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {visibleProducts.length === 0 && (
-                    <tr>
-                      <td colSpan={11} className="px-4 py-8 text-center text-gray-500">No products found</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* ─── Mobile Cards ─── */}
-          <div className="md:hidden space-y-3">
-            {visibleProducts.map(product => (
+          {/* ─── Product Cards Grid ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {visibleProducts.map((product) => (
               <Link
                 key={product.articleId}
                 to={`/inventory/${encodeURIComponent(product.articleId)}`}
-                className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md active:bg-gray-50 transition-shadow"
+                className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-terracotta-200 transition-all"
               >
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-gray-900 text-sm truncate">{product.productName}</p>
-                    <p className="text-[11px] text-gray-400 font-mono mt-0.5">{product.articleId}</p>
+                {/* Image area */}
+                <div className="relative">
+                  <ProductImage productImages={product.productImages} productName={product.productName} variant="card" />
+                  <button
+                    onClick={(e) => handleArchive(e, product)}
+                    disabled={archiving === product.articleId}
+                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/80 backdrop-blur-sm text-gray-500 hover:text-amber-600 hover:bg-white transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-50"
+                    title="Archive product"
+                  >
+                    <Archive size={14} />
+                  </button>
+                  <div className="absolute bottom-2 left-2">
+                    <StockBadge quantity={product.availableQuantity} />
                   </div>
-                  <StockBadge quantity={product.availableQuantity} />
                 </div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="inline-flex px-2 py-0.5 rounded bg-terracotta-50 text-terracotta-700 text-[11px] font-medium">{product.category}</span>
-                  <span className="text-[11px] text-gray-500 truncate">{product.subCategory}</span>
-                </div>
-                <div className="flex items-center justify-between text-[11px] pt-2 border-t border-gray-100">
-                  <span className="text-gray-500">Selling <span className="font-semibold text-gray-900">{formatCurrency(product.sellingPrice)}</span></span>
-                  <span className="text-gray-500">Stock <span className="font-semibold text-gray-900">{product.availableQuantity}</span></span>
-                  <span className="text-gray-500">Sold <span className="font-semibold text-gray-900">{product.totalOrders}</span></span>
+
+                {/* Card body */}
+                <div className="p-3 sm:p-4">
+                  <h3 className="font-semibold text-gray-900 text-sm truncate">{product.productName}</h3>
+                  <p className="text-[11px] text-gray-400 font-mono mt-0.5">{product.articleId}</p>
+
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="inline-flex px-2 py-0.5 rounded bg-terracotta-50 text-terracotta-700 text-[11px] font-medium">{product.category}</span>
+                    <span className="text-[11px] text-gray-500 truncate">{product.subCategory}</span>
+                  </div>
+
+                  <p className="text-lg font-bold text-gray-900 mt-2">{formatCurrency(product.sellingPrice)}</p>
+                  <p className="text-[11px] text-gray-400">Cost {formatCurrency(product.productCost)}</p>
+
+                  <div className="flex items-center justify-between text-[11px] pt-3 mt-3 border-t border-gray-100">
+                    <span className="text-gray-500">Stock <span className="font-semibold text-gray-900">{product.availableQuantity}</span></span>
+                    <span className="text-gray-500">Active <span className="font-semibold text-gray-900">{product.quantityInActiveOrders}</span></span>
+                    <span className="text-gray-500">Sold <span className="font-semibold text-gray-900">{product.totalOrders}</span></span>
+                  </div>
                 </div>
               </Link>
             ))}
             {visibleProducts.length === 0 && (
-              <div className="text-center py-8 text-gray-500 text-sm">No products found</div>
+              <div className="col-span-full text-center py-8 text-gray-500 text-sm">No products found</div>
             )}
           </div>
 

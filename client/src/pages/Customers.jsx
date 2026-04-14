@@ -10,10 +10,12 @@ const BATCH_SIZE = 25;
 
 const ORDER_BUCKETS = ['1', '2', '3', '4', '5', '5+'];
 
-const MOBILE_SORT_OPTIONS = [
-  { key: 'orders_desc', label: 'Total Orders (high → low)', sortField: 'totalOrders',  sortDir: 'desc' },
-  { key: 'name_asc',    label: 'Name: A–Z',                 sortField: 'customerName', sortDir: 'asc' },
-  { key: 'name_desc',   label: 'Name: Z–A',                 sortField: 'customerName', sortDir: 'desc' },
+const SORT_OPTIONS = [
+  { key: 'orders_desc', label: 'Total Orders (high → low)', sortField: 'totalOrders',      sortDir: 'desc' },
+  { key: 'orders_asc',  label: 'Total Orders (low → high)', sortField: 'totalOrders',      sortDir: 'asc' },
+  { key: 'name_asc',    label: 'Name: A–Z',                 sortField: 'customerName',     sortDir: 'asc' },
+  { key: 'name_desc',   label: 'Name: Z–A',                 sortField: 'customerName',     sortDir: 'desc' },
+  { key: 'active_desc', label: 'Most active orders',        sortField: 'activeOrderCount', sortDir: 'desc' },
 ];
 
 function AddCustomerModal({ onClose, onAdded }) {
@@ -103,7 +105,7 @@ export default function Customers() {
   // Sort state
   const [sortField, setSortField] = useState('totalOrders');
   const [sortDir, setSortDir] = useState('desc');
-  const [mobileSort, setMobileSort] = useState('orders_desc');
+  const [activeSort, setActiveSort] = useState('orders_desc');
   const [sortOpen, setSortOpen] = useState(false);
   const sortMenuRef = useRef(null);
 
@@ -167,19 +169,10 @@ export default function Customers() {
     );
   };
 
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDir('desc');
-    }
-  };
-
-  const handleMobileSort = (key) => {
-    const opt = MOBILE_SORT_OPTIONS.find(o => o.key === key);
+  const handleSortSelect = (key) => {
+    const opt = SORT_OPTIONS.find(o => o.key === key);
     if (!opt) return;
-    setMobileSort(key);
+    setActiveSort(key);
     setSortField(opt.sortField);
     setSortDir(opt.sortDir);
     setSortOpen(false);
@@ -312,17 +305,18 @@ export default function Customers() {
             <span className="bg-terracotta-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>
           )}
         </button>
-        {/* Mobile-only sort */}
-        <div className="md:hidden relative" ref={sortMenuRef}>
+        {/* Sort dropdown */}
+        <div className="relative" ref={sortMenuRef}>
           <button onClick={() => setSortOpen(o => !o)}
             className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shrink-0">
             <ArrowUpDown size={16} />
+            <span className="hidden sm:inline">Sort</span>
           </button>
           {sortOpen && (
             <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 w-56 py-1">
-              {MOBILE_SORT_OPTIONS.map(opt => (
-                <button key={opt.key} onClick={() => handleMobileSort(opt.key)}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${mobileSort === opt.key ? 'text-terracotta-600 font-medium' : 'text-gray-700'}`}>
+              {SORT_OPTIONS.map(opt => (
+                <button key={opt.key} onClick={() => handleSortSelect(opt.key)}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${activeSort === opt.key ? 'text-terracotta-600 font-medium' : 'text-gray-700'}`}>
                   {opt.label}
                 </button>
               ))}
@@ -354,149 +348,68 @@ export default function Customers() {
 
       {!loading && !error && (
         <>
-          {/* ─── Desktop Table ─── */}
-          <div className="hidden md:block bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    {[
-                      { key: 'customerName', label: 'Customer Name' },
-                      { key: 'customerPhone', label: 'Phone Number' },
-                      { key: 'customerEmail', label: 'Email' },
-                      { key: 'customerAddress', label: 'Address' },
-                      { key: 'totalOrders', label: 'Total Orders' },
-                      { key: 'activeOrderCount', label: 'Active Orders' },
-                      { key: null, label: '' },
-                    ].map(col => (
-                      <th
-                        key={col.label || 'actions'}
-                        onClick={() => col.key && handleSort(col.key)}
-                        className={`px-4 py-3 text-left font-medium text-gray-600 ${col.key ? 'cursor-pointer hover:text-gray-900' : ''}`}
-                      >
-                        {col.label}
-                        {sortField === col.key && (sortDir === 'asc' ? ' \u2191' : ' \u2193')}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {visibleCustomers.map((customer, i) => (
-                    <tr key={i} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-terracotta-100 text-terracotta-700 flex items-center justify-center text-xs font-bold">
-                            {customer.customerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                          </div>
-                          <span className="font-medium text-gray-900">{customer.customerName}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5 text-gray-600">
-                          <Phone size={13} />
-                          {customer.customerPhone}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {customer.customerEmail ? (
-                          <div className="flex items-center gap-1.5 text-gray-600">
-                            <Mail size={13} />
-                            <span className="truncate max-w-[180px]">{customer.customerEmail}</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-start gap-1.5 text-gray-600 max-w-xs truncate">
-                          <MapPin size={13} className="mt-0.5 shrink-0" />
-                          <span className="truncate">{customer.customerAddress}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          {customer.totalOrders}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {customer.activeOrderCount > 0 ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            {customer.activeOrderCount}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-400">None</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <Link
-                            to={`/customers/${encodeURIComponent(customer.customerPhone)}`}
-                            className="text-sm text-terracotta-600 hover:text-terracotta-800 font-medium"
-                          >
-                            View
-                          </Link>
-                          <button
-                            onClick={(e) => handleArchive(e, customer)}
-                            disabled={archiving === customer.customerPhone}
-                            className="text-sm text-gray-400 hover:text-amber-600 transition-colors disabled:opacity-50"
-                            title="Archive customer"
-                          >
-                            <Archive size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {visibleCustomers.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-gray-500">No customers found</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* ─── Mobile Cards ─── */}
-          <div className="md:hidden space-y-3">
+          {/* ─── Customer Cards Grid ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {visibleCustomers.map((customer, i) => (
               <Link
                 key={i}
                 to={`/customers/${encodeURIComponent(customer.customerPhone)}`}
-                className="block bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md active:bg-gray-50 transition-shadow"
+                className="group block bg-white rounded-xl border border-gray-200 p-4 sm:p-5 hover:shadow-lg hover:border-terracotta-200 transition-all"
               >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded-full bg-terracotta-100 text-terracotta-700 flex items-center justify-center text-sm font-bold shrink-0">
+                {/* Top: Avatar + Name + Active badge + Archive */}
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-terracotta-100 text-terracotta-700 flex items-center justify-center text-base sm:text-lg font-bold shrink-0">
                     {customer.customerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-gray-900 text-sm truncate">{customer.customerName}</p>
-                    <p className="text-xs text-gray-500 truncate flex items-center gap-1"><Phone size={11} />{customer.customerPhone}</p>
+                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{customer.customerName}</h3>
+                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                      <Phone size={12} />{customer.customerPhone}
+                    </p>
                   </div>
-                  {customer.activeOrderCount > 0 && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-800 shrink-0">
-                      {customer.activeOrderCount} active
-                    </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {customer.activeOrderCount > 0 && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-800">
+                        {customer.activeOrderCount} active
+                      </span>
+                    )}
+                    <button
+                      onClick={(e) => handleArchive(e, customer)}
+                      disabled={archiving === customer.customerPhone}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-50"
+                      title="Archive customer"
+                    >
+                      <Archive size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Contact details */}
+                <div className="mt-3 space-y-1">
+                  {customer.customerEmail && (
+                    <p className="text-xs text-gray-500 truncate flex items-center gap-1.5">
+                      <Mail size={12} className="shrink-0" />{customer.customerEmail}
+                    </p>
+                  )}
+                  {customer.customerAddress && (
+                    <p className="text-xs text-gray-500 flex items-start gap-1.5">
+                      <MapPin size={12} className="mt-0.5 shrink-0" />
+                      <span className="line-clamp-2">{customer.customerAddress}</span>
+                    </p>
                   )}
                 </div>
-                {customer.customerEmail && (
-                  <p className="text-[11px] text-gray-500 truncate flex items-center gap-1.5 mb-1">
-                    <Mail size={11} className="shrink-0" />{customer.customerEmail}
-                  </p>
-                )}
-                {customer.customerAddress && (
-                  <p className="text-[11px] text-gray-500 flex items-start gap-1.5 mb-2">
-                    <MapPin size={11} className="mt-0.5 shrink-0" />
-                    <span className="truncate">{customer.customerAddress}</span>
-                  </p>
-                )}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <span className="text-[11px] text-gray-500">Total Orders <span className="font-semibold text-gray-900">{customer.totalOrders}</span></span>
+
+                {/* Stats footer */}
+                <div className="flex items-center justify-between text-[11px] pt-3 mt-3 border-t border-gray-100">
+                  <span className="text-gray-500">Total Orders <span className="font-semibold text-gray-900">{customer.totalOrders}</span></span>
+                  {customer.activeOrderCount > 0 && (
+                    <span className="text-gray-500">Active <span className="font-semibold text-green-700">{customer.activeOrderCount}</span></span>
+                  )}
                 </div>
               </Link>
             ))}
             {visibleCustomers.length === 0 && (
-              <div className="text-center py-8 text-gray-500 text-sm">No customers found</div>
+              <div className="col-span-full text-center py-8 text-gray-500 text-sm">No customers found</div>
             )}
           </div>
 

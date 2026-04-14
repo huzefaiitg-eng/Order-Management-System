@@ -317,6 +317,7 @@ async function updateProduct(sheetId, articleId, updates) {
   if (updates.productDescription !== undefined) data.push({ range: `Inventory!C${rowIdx}`, values: [[updates.productDescription]] });
   if (updates.category !== undefined) data.push({ range: `Inventory!D${rowIdx}`, values: [[updates.category]] });
   if (updates.subCategory !== undefined) data.push({ range: `Inventory!E${rowIdx}`, values: [[updates.subCategory]] });
+  if (updates.productImages !== undefined) data.push({ range: `Inventory!F${rowIdx}`, values: [[updates.productImages]] });
   if (updates.productCost !== undefined) data.push({ range: `Inventory!G${rowIdx}`, values: [[updates.productCost]] });
   if (updates.sellingPrice !== undefined) data.push({ range: `Inventory!H${rowIdx}`, values: [[updates.sellingPrice]] });
   if (updates.instockQuantity !== undefined) data.push({ range: `Inventory!I${rowIdx}`, values: [[updates.instockQuantity]] });

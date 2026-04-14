@@ -6,6 +6,7 @@ import { formatCurrency, formatPercent } from '../utils/formatters';
 import { useCategories } from '../hooks/useCategories';
 import StockBadge from '../components/StockBadge';
 import StatusBadge from '../components/StatusBadge';
+import ProductImage from '../components/ProductImage';
 import DetailOverlay from '../components/DetailOverlay';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
@@ -98,9 +99,7 @@ export default function ProductDetail() {
       {/* Product Header */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-lg bg-terracotta-100 text-terracotta-700 flex items-center justify-center">
-            <Package size={24} />
-          </div>
+          <ProductImage productImages={product.productImages} productName={product.productName} variant="detail" iconSize={24} />
           <div className="flex-1">
             {editing ? (
               <div className="space-y-3">
