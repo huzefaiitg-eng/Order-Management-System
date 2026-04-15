@@ -56,11 +56,11 @@ router.get('/', async (req, res) => {
     const ACTIVE_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery'];
     const activeQtyByProduct = {};
     orders.forEach(o => {
-      const name = o.productOrdered;
-      if (!name) return;
-      if (ACTIVE_STATUSES.includes(o.orderStatus)) {
-        activeQtyByProduct[name] = (activeQtyByProduct[name] || 0) + (o.quantityOrdered || 1);
-      }
+      if (!ACTIVE_STATUSES.includes(o.orderStatus)) return;
+      (o.productLines || []).forEach(line => {
+        if (!line.productName) return;
+        activeQtyByProduct[line.productName] = (activeQtyByProduct[line.productName] || 0) + (line.quantity || 1);
+      });
     });
 
     const activeInventory = inventory.filter(p => p.status !== 'Archived').map(p => ({

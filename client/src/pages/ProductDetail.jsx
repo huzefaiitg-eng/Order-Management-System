@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Package, ShoppingBag, IndianRupee, RotateCcw, TrendingUp, Pencil, X, Check, Archive } from 'lucide-react';
+import { Package, ShoppingBag, IndianRupee, RotateCcw, TrendingUp, Pencil, X, Check, Archive, Clock, BoxSelect } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
 import { fetchProductByArticleId, updateProduct, archiveProduct } from '../services/api';
 import { formatCurrency, formatPercent } from '../utils/formatters';
@@ -221,12 +221,26 @@ export default function ProductDetail() {
             </div>
 
             {/* Stats grid */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                 <Package size={18} className="text-blue-600 shrink-0" />
                 <div>
                   <p className="text-xs text-gray-500">In Stock</p>
                   <p className="text-lg font-bold text-gray-900">{product.instockQuantity}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg">
+                <Clock size={18} className="text-amber-600 shrink-0" />
+                <div>
+                  <p className="text-xs text-gray-500">Active Orders</p>
+                  <p className="text-lg font-bold text-amber-700">{product.quantityInActiveOrders || 0}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <BoxSelect size={18} className="text-purple-600 shrink-0" />
+                <div>
+                  <p className="text-xs text-gray-500">Available</p>
+                  <p className={`text-lg font-bold ${product.availableQuantity <= 0 ? 'text-red-600' : product.availableQuantity < 5 ? 'text-amber-600' : 'text-gray-900'}`}>{product.availableQuantity}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">

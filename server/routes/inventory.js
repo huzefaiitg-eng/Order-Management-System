@@ -13,14 +13,14 @@ router.get('/summary', async (req, res) => {
     const { sheetId } = req.user;
     const [products, orders] = await Promise.all([getAllInventory(sheetId), getAllOrders(sheetId)]);
 
-    // Compute dynamic active order quantities
+    // Compute dynamic active order quantities using productLines for proper per-product matching
     const activeQtyByProduct = {};
     orders.forEach(order => {
-      const name = order.productOrdered;
-      if (!name) return;
-      if (ACTIVE_STATUSES.includes(order.orderStatus)) {
-        activeQtyByProduct[name] = (activeQtyByProduct[name] || 0) + (order.quantityOrdered || 1);
-      }
+      if (!ACTIVE_STATUSES.includes(order.orderStatus)) return;
+      (order.productLines || []).forEach(line => {
+        if (!line.productName) return;
+        activeQtyByProduct[line.productName] = (activeQtyByProduct[line.productName] || 0) + (line.quantity || 1);
+      });
     });
 
     const activeProducts = products.filter(p => p.status === 'Active' || !p.status).map(p => ({
@@ -70,13 +70,15 @@ router.get('/', async (req, res) => {
 
     const productStats = {};
     orders.forEach(order => {
-      const name = order.productOrdered;
-      if (!name) return;
-      if (!productStats[name]) productStats[name] = { totalOrders: 0, totalRevenue: 0, returnedCount: 0, activeQty: 0 };
-      productStats[name].totalOrders++;
-      productStats[name].totalRevenue += order.pricePaid;
-      if (order.orderStatus === 'Returned') productStats[name].returnedCount++;
-      if (ACTIVE_STATUSES.includes(order.orderStatus)) productStats[name].activeQty += (order.quantityOrdered || 1);
+      (order.productLines || []).forEach(line => {
+        const name = line.productName;
+        if (!name) return;
+        if (!productStats[name]) productStats[name] = { totalOrders: 0, totalRevenue: 0, returnedCount: 0, activeQty: 0 };
+        productStats[name].totalOrders++;
+        productStats[name].totalRevenue += line.sellingLineTotal || line.lineTotal || 0;
+        if (order.orderStatus === 'Returned') productStats[name].returnedCount++;
+        if (ACTIVE_STATUSES.includes(order.orderStatus)) productStats[name].activeQty += (line.quantity || 1);
+      });
     });
 
     let result = products.map(p => {
@@ -151,15 +153,20 @@ router.get('/:articleId', async (req, res) => {
     const [product, orders] = await Promise.all([getProductByArticleId(sheetId, articleId), getAllOrders(sheetId)]);
     if (!product) return res.status(404).json({ success: false, error: 'Product not found' });
 
-    const productOrders = orders.filter(o => o.productOrdered === product.productName);
+    const productOrders = orders.filter(o =>
+      (o.productLines || []).some(l => l.productName === product.productName)
+    );
     const totalRevenue = productOrders.reduce((sum, o) => sum + o.pricePaid, 0);
     const totalProfit = productOrders.reduce((sum, o) => sum + o.profit, 0);
     const returnedCount = productOrders.filter(o => o.orderStatus === 'Returned').length;
 
-    // Dynamically compute active order quantities from live orders
+    // Dynamically compute active order quantities from live orders using per-line quantities
     const quantityInActiveOrders = productOrders
       .filter(o => ACTIVE_STATUSES.includes(o.orderStatus))
-      .reduce((sum, o) => sum + (o.quantityOrdered || 1), 0);
+      .reduce((sum, o) => {
+        const line = (o.productLines || []).find(l => l.productName === product.productName);
+        return sum + (line ? line.quantity || 1 : 1);
+      }, 0);
 
     res.json({
       success: true,

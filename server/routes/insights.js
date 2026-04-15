@@ -81,14 +81,14 @@ router.get('/', async (req, res) => {
       .filter(c => c.returnRate > 0.3)
       .sort((a, b) => b.returnRate - a.returnRate);
 
-    // Compute dynamic available quantities from live orders
+    // Compute dynamic available quantities from live orders using productLines
     const activeQtyByProduct = {};
     orders.forEach(o => {
-      const name = o.productOrdered;
-      if (!name) return;
-      if (activeStatuses.includes(o.orderStatus)) {
-        activeQtyByProduct[name] = (activeQtyByProduct[name] || 0) + (o.quantityOrdered || 1);
-      }
+      if (!activeStatuses.includes(o.orderStatus)) return;
+      (o.productLines || []).forEach(line => {
+        if (!line.productName) return;
+        activeQtyByProduct[line.productName] = (activeQtyByProduct[line.productName] || 0) + (line.quantity || 1);
+      });
     });
 
     const enrichedInventory = inventory.map(p => ({
@@ -107,11 +107,13 @@ router.get('/', async (req, res) => {
 
     const productOrderStats = {};
     orders.forEach(o => {
-      const name = o.productOrdered;
-      if (!name) return;
-      if (!productOrderStats[name]) productOrderStats[name] = { totalOrders: 0, totalRevenue: 0 };
-      productOrderStats[name].totalOrders++;
-      productOrderStats[name].totalRevenue += o.pricePaid;
+      (o.productLines || []).forEach(line => {
+        const name = line.productName;
+        if (!name) return;
+        if (!productOrderStats[name]) productOrderStats[name] = { totalOrders: 0, totalRevenue: 0 };
+        productOrderStats[name].totalOrders++;
+        productOrderStats[name].totalRevenue += line.sellingLineTotal || line.lineTotal || 0;
+      });
     });
 
     const productLookup = {};
