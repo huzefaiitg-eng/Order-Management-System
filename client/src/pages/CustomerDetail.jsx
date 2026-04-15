@@ -90,9 +90,11 @@ export default function CustomerDetail() {
   if (error) return <DetailOverlay fallback="/customers"><ErrorMessage message={error} /></DetailOverlay>;
   if (!customer) return null;
 
-  const activeStatuses = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery'];
-  const activeOrders = customer.orders.filter(o => activeStatuses.includes(o.orderStatus));
-  const pastOrders = customer.orders.filter(o => !activeStatuses.includes(o.orderStatus));
+  // Active = anything NOT in terminal states (Delivered/Returned/Cancelled/Refunded)
+  const TERMINAL_STATUSES = ['Delivered', 'Returned', 'Cancelled', 'Refunded'];
+  const isActiveOrder = (s) => s && !TERMINAL_STATUSES.includes(String(s).trim());
+  const activeOrders = customer.orders.filter(o => isActiveOrder(o.orderStatus));
+  const pastOrders = customer.orders.filter(o => !isActiveOrder(o.orderStatus));
 
   return (
     <DetailOverlay fallback="/customers" title={customer.customerName}>

@@ -52,11 +52,13 @@ router.get('/', async (req, res) => {
     );
     const newCustomers7d = recentPhones.size;
 
-    // Inventory KPIs (always full dataset) — compute dynamic available quantities
-    const ACTIVE_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery'];
+    // Inventory KPIs (always full dataset) — compute dynamic available quantities.
+    // Active = anything not in Delivered/Returned/Cancelled/Refunded.
+    const TERMINAL_STATUSES = ['Delivered', 'Returned', 'Cancelled', 'Refunded'];
+    const isActiveOrder = (s) => s && !TERMINAL_STATUSES.includes(String(s).trim());
     const activeQtyByProduct = {};
     orders.forEach(o => {
-      if (!ACTIVE_STATUSES.includes(o.orderStatus)) return;
+      if (!isActiveOrder(o.orderStatus)) return;
       (o.productLines || []).forEach(line => {
         if (!line.productName) return;
         activeQtyByProduct[line.productName] = (activeQtyByProduct[line.productName] || 0) + (line.quantity || 1);

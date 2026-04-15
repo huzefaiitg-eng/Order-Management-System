@@ -420,8 +420,8 @@ export default function Inventory() {
                   <p className="text-[11px] text-gray-400">Cost {formatCurrency(product.productCost)}</p>
 
                   <div className="flex items-center justify-between text-[11px] pt-3 mt-3 border-t border-gray-100">
-                    <span className="text-gray-500">Stock <span className="font-semibold text-gray-900">{product.availableQuantity}</span></span>
-                    <span className="text-gray-500">Active <span className="font-semibold text-gray-900">{product.quantityInActiveOrders}</span></span>
+                    <span className="text-gray-500" title={`In Stock ${product.instockQuantity} − Active Units ${product.quantityInActiveOrders}`}>Available <span className="font-semibold text-gray-900">{product.availableQuantity}</span></span>
+                    <span className="text-gray-500" title={`${product.quantityInActiveOrders} unit(s) committed`}>Active <span className="font-semibold text-gray-900">{product.activeOrderCount || 0}</span></span>
                     <span className="text-gray-500">Sold <span className="font-semibold text-gray-900">{product.totalOrders}</span></span>
                   </div>
                 </div>

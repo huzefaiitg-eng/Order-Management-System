@@ -6,7 +6,14 @@ const {
 } = require('../services/sheets');
 
 const LOW_STOCK_THRESHOLD = 5;
-const ACTIVE_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery'];
+
+// An order is ACTIVE unless it has reached a terminal state.
+// Anything that's not Delivered / Returned / Cancelled / Refunded is active.
+const TERMINAL_STATUSES = ['Delivered', 'Returned', 'Cancelled', 'Refunded'];
+const isActiveOrder = (status) => {
+  if (!status) return false;
+  return !TERMINAL_STATUSES.includes(String(status).trim());
+};
 
 router.get('/summary', async (req, res) => {
   try {
@@ -16,7 +23,7 @@ router.get('/summary', async (req, res) => {
     // Compute dynamic active order quantities using productLines for proper per-product matching
     const activeQtyByProduct = {};
     orders.forEach(order => {
-      if (!ACTIVE_STATUSES.includes(order.orderStatus)) return;
+      if (!isActiveOrder(order.orderStatus)) return;
       (order.productLines || []).forEach(line => {
         if (!line.productName) return;
         activeQtyByProduct[line.productName] = (activeQtyByProduct[line.productName] || 0) + (line.quantity || 1);
@@ -70,23 +77,28 @@ router.get('/', async (req, res) => {
 
     const productStats = {};
     orders.forEach(order => {
+      const active = isActiveOrder(order.orderStatus);
       (order.productLines || []).forEach(line => {
         const name = line.productName;
         if (!name) return;
-        if (!productStats[name]) productStats[name] = { totalOrders: 0, totalRevenue: 0, returnedCount: 0, activeQty: 0 };
+        if (!productStats[name]) productStats[name] = { totalOrders: 0, totalRevenue: 0, returnedCount: 0, activeOrderCount: 0, activeQty: 0 };
         productStats[name].totalOrders++;
         productStats[name].totalRevenue += line.sellingLineTotal || line.lineTotal || 0;
         if (order.orderStatus === 'Returned') productStats[name].returnedCount++;
-        if (ACTIVE_STATUSES.includes(order.orderStatus)) productStats[name].activeQty += (line.quantity || 1);
+        if (active) {
+          productStats[name].activeOrderCount++;
+          productStats[name].activeQty += (line.quantity || 1);
+        }
       });
     });
 
     let result = products.map(p => {
-      const stats = productStats[p.productName] || { totalOrders: 0, totalRevenue: 0, returnedCount: 0, activeQty: 0 };
+      const stats = productStats[p.productName] || { totalOrders: 0, totalRevenue: 0, returnedCount: 0, activeOrderCount: 0, activeQty: 0 };
       const quantityInActiveOrders = stats.activeQty;
       return {
         ...p,
         totalOrders: stats.totalOrders, totalRevenue: stats.totalRevenue, returnedCount: stats.returnedCount,
+        activeOrderCount: stats.activeOrderCount,
         quantityInActiveOrders,
         availableQuantity: p.instockQuantity - quantityInActiveOrders,
       };
@@ -160,18 +172,19 @@ router.get('/:articleId', async (req, res) => {
     const totalProfit = productOrders.reduce((sum, o) => sum + o.profit, 0);
     const returnedCount = productOrders.filter(o => o.orderStatus === 'Returned').length;
 
-    // Dynamically compute active order quantities from live orders using per-line quantities
-    const quantityInActiveOrders = productOrders
-      .filter(o => ACTIVE_STATUSES.includes(o.orderStatus))
-      .reduce((sum, o) => {
-        const line = (o.productLines || []).find(l => l.productName === product.productName);
-        return sum + (line ? line.quantity || 1 : 1);
-      }, 0);
+    // Active orders = orders not in Delivered/Returned/Cancelled/Refunded
+    const activeOrders = productOrders.filter(o => isActiveOrder(o.orderStatus));
+    const activeOrderCount = activeOrders.length;
+    const quantityInActiveOrders = activeOrders.reduce((sum, o) => {
+      const line = (o.productLines || []).find(l => l.productName === product.productName);
+      return sum + (line ? line.quantity || 1 : 1);
+    }, 0);
 
     res.json({
       success: true,
       data: {
         ...product,
+        activeOrderCount,
         quantityInActiveOrders,
         availableQuantity: product.instockQuantity - quantityInActiveOrders,
         totalOrders: productOrders.length, totalRevenue, totalProfit,

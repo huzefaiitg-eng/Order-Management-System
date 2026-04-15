@@ -229,14 +229,19 @@ export default function ProductDetail() {
                   <p className="text-lg font-bold text-gray-900">{product.instockQuantity}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg">
+              <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg" title={`${product.quantityInActiveOrders || 0} unit(s) committed across active orders`}>
                 <Clock size={18} className="text-amber-600 shrink-0" />
                 <div>
                   <p className="text-xs text-gray-500">Active Orders</p>
-                  <p className="text-lg font-bold text-amber-700">{product.quantityInActiveOrders || 0}</p>
+                  <p className="text-lg font-bold text-amber-700">
+                    {product.activeOrderCount || 0}
+                    {(product.quantityInActiveOrders || 0) !== (product.activeOrderCount || 0) && (
+                      <span className="text-xs font-normal text-amber-600 ml-1">({product.quantityInActiveOrders} units)</span>
+                    )}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg" title={`In Stock (${product.instockQuantity}) − Active Units (${product.quantityInActiveOrders || 0})`}>
                 <BoxSelect size={18} className="text-purple-600 shrink-0" />
                 <div>
                   <p className="text-xs text-gray-500">Available</p>

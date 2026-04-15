@@ -5,7 +5,9 @@ const {
   addCustomer, updateCustomer, archiveCustomer, unarchiveCustomer, deleteCustomer,
 } = require('../services/sheets');
 
-const ACTIVE_STATUSES = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery'];
+// Active = anything not in Delivered/Returned/Cancelled/Refunded
+const TERMINAL_STATUSES = ['Delivered', 'Returned', 'Cancelled', 'Refunded'];
+const isActiveOrder = (s) => s && !TERMINAL_STATUSES.includes(String(s).trim());
 
 router.post('/', async (req, res) => {
   try {
@@ -34,7 +36,7 @@ router.get('/', async (req, res) => {
       if (!phone) return;
       if (!orderStats[phone]) orderStats[phone] = { totalOrders: 0, activeOrderCount: 0 };
       orderStats[phone].totalOrders++;
-      if (ACTIVE_STATUSES.includes(order.orderStatus)) orderStats[phone].activeOrderCount++;
+      if (isActiveOrder(order.orderStatus)) orderStats[phone].activeOrderCount++;
     });
 
     let result = customers.map(c => {
@@ -122,7 +124,7 @@ router.get('/:phone', async (req, res) => {
         customerPhone: customer.customerPhone, customerAddress: customer.customerAddress,
         customerEmail: customer.customerEmail, status: customer.status,
         totalOrders: customerOrders.length,
-        activeOrderCount: customerOrders.filter(o => ACTIVE_STATUSES.includes(o.orderStatus)).length,
+        activeOrderCount: customerOrders.filter(o => isActiveOrder(o.orderStatus)).length,
         totalSpent: customerOrders.reduce((sum, o) => sum + o.pricePaid, 0),
         orders: customerOrders,
       },

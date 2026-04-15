@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
     const [orders, inventory] = await Promise.all([getAllOrders(sheetId), getAllInventory(sheetId)]);
     const now = new Date();
     const terminalStatuses = ['Delivered', 'Returned', 'Cancelled', 'Refunded'];
-    const activeStatuses = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery'];
+    const isActiveOrder = (s) => s && !terminalStatuses.includes(String(s).trim());
 
     const codFollowUps = orders.filter(o => o.modeOfPayment === 'COD' && o.orderStatus === 'Delivered');
 
@@ -84,7 +84,7 @@ router.get('/', async (req, res) => {
     // Compute dynamic available quantities from live orders using productLines
     const activeQtyByProduct = {};
     orders.forEach(o => {
-      if (!activeStatuses.includes(o.orderStatus)) return;
+      if (!isActiveOrder(o.orderStatus)) return;
       (o.productLines || []).forEach(line => {
         if (!line.productName) return;
         activeQtyByProduct[line.productName] = (activeQtyByProduct[line.productName] || 0) + (line.quantity || 1);
