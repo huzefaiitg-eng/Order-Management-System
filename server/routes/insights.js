@@ -93,7 +93,7 @@ router.get('/', async (req, res) => {
     const enrichedInventory = inventory.map(p => ({
       ...p,
       quantityInActiveOrders: activeQtyByProduct[p.productName] || 0,
-      availableQuantity: p.instockQuantity - (activeQtyByProduct[p.productName] || 0),
+      availableQuantity: p.instockQuantity,
     }));
 
     const lowStockAlerts = enrichedInventory

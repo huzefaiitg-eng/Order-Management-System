@@ -254,7 +254,7 @@ function rowToProduct(row, rowIndex) {
     sellingPrice: parseFloat(row[INVENTORY_COLUMN_MAP.sellingPrice]) || 0,
     instockQuantity,
     quantityInActiveOrders,
-    availableQuantity: instockQuantity - quantityInActiveOrders,
+    availableQuantity: instockQuantity,
     status: row[INVENTORY_COLUMN_MAP.status] || 'Active',
     minStock,
     maxStock,
@@ -517,7 +517,7 @@ async function adjustStock(sheetId, articleId, { delta, reason, changeType }) {
     reason,
   });
 
-  return { ...product, instockQuantity: newQty, availableQuantity: newQty - product.quantityInActiveOrders };
+  return { ...product, instockQuantity: newQty, availableQuantity: newQty };
 }
 
 async function getOrderByRowIndex(sheetId, rowIndex) {

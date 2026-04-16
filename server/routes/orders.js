@@ -122,6 +122,26 @@ router.post('/', async (req, res) => {
 
     await addAuditEntry(sheetId, { orderRowIndex: result.rowIndex, previousStatus: '', newStatus: 'Pending' });
 
+    // Stock side-effect: decrement instockQuantity for every product in this order
+    try {
+      const inv = await getAllInventory(sheetId);
+      const lines = result.productLines || [];
+      for (const line of lines) {
+        if (!line.productName) continue;
+        const qty = parseInt(line.quantity) || 0;
+        if (qty <= 0) continue;
+        const product = inv.find(p => p.productName === line.productName);
+        if (!product) continue;
+        await adjustStock(sheetId, product.articleId, {
+          delta: -qty,
+          reason: `Order ${result.orderNumber || `#${result.rowIndex}`} placed (row ${result.rowIndex})`,
+          changeType: 'order-placed',
+        });
+      }
+    } catch (err) {
+      console.error('Stock side-effect error on order creation:', err.message);
+    }
+
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error adding order:', error.message);
@@ -159,10 +179,12 @@ router.patch('/:rowIndex', async (req, res) => {
     const result = await updateOrderStatus(sheetId, rowIndex, status);
     await addAuditEntry(sheetId, { orderRowIndex: rowIndex, previousStatus: currentStatus, newStatus: status });
 
-    // Stock side-effects when a Delivered transition happens in either direction
-    const enteringDelivered = status === 'Delivered' && currentStatus !== 'Delivered';
-    const exitingDelivered = currentStatus === 'Delivered' && status !== 'Delivered';
-    if (enteringDelivered || exitingDelivered) {
+    // Stock side-effects: restore stock when entering Returned/Cancelled/Refunded,
+    // re-consume stock when exiting those statuses (e.g. re-activating an order).
+    const RESTORE_STATUSES = ['Returned', 'Cancelled', 'Refunded'];
+    const enteringRestore = RESTORE_STATUSES.includes(status) && !RESTORE_STATUSES.includes(currentStatus);
+    const exitingRestore = RESTORE_STATUSES.includes(currentStatus) && !RESTORE_STATUSES.includes(status);
+    if (enteringRestore || exitingRestore) {
       try {
         const [order, inv] = await Promise.all([getOrderByRowIndex(sheetId, rowIndex), getAllInventory(sheetId)]);
         if (order && order.productLines && order.productLines.length > 0) {
@@ -172,19 +194,15 @@ router.patch('/:rowIndex', async (req, res) => {
             if (qty <= 0) continue;
             const product = inv.find(p => p.productName === line.productName);
             if (!product) continue;
-            const delta = enteringDelivered ? -qty : +qty;
-            const reason = enteringDelivered
-              ? `Order ${order.orderNumber || `#${rowIndex}`} delivered (row ${rowIndex})`
-              : `Order ${order.orderNumber || `#${rowIndex}`} delivery reversed → ${status} (row ${rowIndex})`;
-            await adjustStock(sheetId, product.articleId, {
-              delta,
-              reason,
-              changeType: enteringDelivered ? 'delivered' : 'delivery-reversed',
-            });
+            const delta = enteringRestore ? +qty : -qty;
+            const changeType = enteringRestore ? 'order-restored' : 'order-reactivated';
+            const reason = enteringRestore
+              ? `Order ${order.orderNumber || `#${rowIndex}`} ${status.toLowerCase()} — stock restored (row ${rowIndex})`
+              : `Order ${order.orderNumber || `#${rowIndex}`} reactivated from ${currentStatus} → ${status} (row ${rowIndex})`;
+            await adjustStock(sheetId, product.articleId, { delta, reason, changeType });
           }
         }
       } catch (err) {
-        // Log but don't fail the status update — user shouldn't lose their status change if audit logging breaks
         console.error('Stock side-effect error on order status change:', err.message);
       }
     }

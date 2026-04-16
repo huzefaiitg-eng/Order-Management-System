@@ -67,7 +67,7 @@ router.get('/', async (req, res) => {
 
     const activeInventory = inventory.filter(p => p.status !== 'Archived').map(p => ({
       ...p,
-      availableQuantity: p.instockQuantity - (activeQtyByProduct[p.productName] || 0),
+      availableQuantity: p.instockQuantity,
     }));
     const outOfStockCount = activeInventory.filter(p => p.instockQuantity === 0).length;
     const lowStockCount = activeInventory.filter(p => p.availableQuantity > 0 && p.availableQuantity < (p.minStock || 5)).length;

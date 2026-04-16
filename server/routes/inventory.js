@@ -32,7 +32,7 @@ router.get('/summary', async (req, res) => {
     const activeProducts = products.filter(p => p.status === 'Active' || !p.status).map(p => ({
       ...p,
       quantityInActiveOrders: activeQtyByProduct[p.productName] || 0,
-      availableQuantity: p.instockQuantity - (activeQtyByProduct[p.productName] || 0),
+      availableQuantity: p.instockQuantity,
     }));
 
     const totalProducts = activeProducts.length;
@@ -106,7 +106,7 @@ router.get('/', async (req, res) => {
         totalOrders: stats.totalOrders, totalRevenue: stats.totalRevenue, returnedCount: stats.returnedCount,
         activeOrderCount: stats.activeOrderCount,
         quantityInActiveOrders,
-        availableQuantity: p.instockQuantity - quantityInActiveOrders,
+        availableQuantity: p.instockQuantity,
       };
     });
 
@@ -192,7 +192,7 @@ router.get('/:articleId', async (req, res) => {
         ...product,
         activeOrderCount,
         quantityInActiveOrders,
-        availableQuantity: product.instockQuantity - quantityInActiveOrders,
+        availableQuantity: product.instockQuantity,
         totalOrders: productOrders.length, totalRevenue, totalProfit,
         returnRate: productOrders.length > 0 ? returnedCount / productOrders.length : 0,
         averageMargin: productOrders.length > 0 ? totalProfit / productOrders.length : 0,
