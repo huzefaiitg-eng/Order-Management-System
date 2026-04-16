@@ -267,188 +267,192 @@ export default function ProductDetail() {
           </div>
         </div>
       ) : (
-        /* ─── View Mode: Gallery left + Details right on desktop ─── */
-        <div className="flex flex-col md:flex-row gap-5">
-          {/* Left — Image Gallery */}
-          <div className="w-full md:w-1/2 md:sticky md:top-20 md:self-start">
-            <ProductImage productImages={product.productImages} productName={product.productName} variant="gallery" iconSize={40} />
+        /* ─── View Mode ─── */
+        <>
+          {/* ─── Hero: Gallery left + Product Info right on desktop ─── */}
+          <div className="flex flex-col md:flex-row gap-5">
+            {/* Left — Image Gallery */}
+            <div className="w-full md:w-[45%] md:sticky md:top-20 md:self-start">
+              <ProductImage productImages={product.productImages} productName={product.productName} variant="gallery" iconSize={40} />
+            </div>
+
+            {/* Right — Core Product Info */}
+            <div className="w-full md:w-[55%] space-y-4">
+              {/* Name + Article ID + Action Buttons (inline on desktop) */}
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                <div className="min-w-0">
+                  <h1 className="text-xl md:text-2xl font-bold text-gray-900">{product.productName}</h1>
+                  <p className="text-xs font-mono text-gray-400 mt-0.5">{product.articleId}</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={startEditing}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  >
+                    <Pencil size={14} /> Edit Details
+                  </button>
+                  <button
+                    onClick={handleArchive}
+                    disabled={archiving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 hover:text-amber-700 hover:border-amber-300 disabled:opacity-50"
+                  >
+                    <Archive size={14} /> {archiving ? 'Archiving...' : 'Archive'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Badges */}
+              <div className="flex flex-wrap gap-2">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-terracotta-100 text-terracotta-800">
+                  {product.category}
+                </span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                  {product.subCategory}
+                </span>
+                <StockBadge quantity={product.availableQuantity} minStock={minStock} />
+              </div>
+
+              {/* Description */}
+              {product.productDescription && (
+                <p className="text-sm text-gray-600 leading-relaxed">{product.productDescription}</p>
+              )}
+
+              {/* Price card */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium">Selling Price</p>
+                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(product.sellingPrice)}</p>
+                  </div>
+                  <div className="border-l border-gray-200 pl-4">
+                    <p className="text-xs text-gray-500 font-medium">Cost Price</p>
+                    <p className="text-lg font-semibold text-gray-600">{formatCurrency(product.productCost)}</p>
+                  </div>
+                  {product.sellingPrice > product.productCost && (
+                    <span className="text-xs font-medium text-green-700 bg-green-50 px-2.5 py-1 rounded-full self-center ml-auto">
+                      {formatPercent(((product.sellingPrice - product.productCost) / product.productCost) * 100)} margin
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Min / Max stock thresholds (product settings) */}
+              <div className="flex items-center gap-4 text-xs text-gray-500 px-1">
+                <span>Min Stock: <span className="font-semibold text-gray-700">{minStock}</span></span>
+                <span className="text-gray-300">·</span>
+                <span>Max Stock: <span className="font-semibold text-gray-700">{maxStock > 0 ? maxStock : 'No cap'}</span></span>
+              </div>
+            </div>
           </div>
 
-          {/* Right — Product Info */}
-          <div className="w-full md:w-1/2 space-y-4">
-            {/* Name */}
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-gray-900">{product.productName}</h1>
-              <p className="text-xs font-mono text-gray-400 mt-0.5">{product.articleId}</p>
+          {/* ─── Full-width Stats Grid ─── */}
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+            <div className="flex items-center gap-2.5 p-3 bg-gray-50 rounded-lg">
+              <Package size={18} className="text-blue-600 shrink-0" />
+              <div>
+                <p className="text-xs text-gray-500">In Stock</p>
+                <p className="text-lg font-bold text-gray-900">{product.instockQuantity}</p>
+              </div>
             </div>
+            <div className="flex items-center gap-2.5 p-3 bg-amber-50 rounded-lg" title={`${product.quantityInActiveOrders || 0} unit(s) committed across active orders`}>
+              <Clock size={18} className="text-amber-600 shrink-0" />
+              <div>
+                <p className="text-xs text-gray-500">Active Orders</p>
+                <p className="text-lg font-bold text-amber-700">
+                  {product.activeOrderCount || 0}
+                  {(product.quantityInActiveOrders || 0) !== (product.activeOrderCount || 0) && (
+                    <span className="text-xs font-normal text-amber-600 ml-0.5">({product.quantityInActiveOrders})</span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 p-3 bg-gray-50 rounded-lg">
+              <BoxSelect size={18} className="text-purple-600 shrink-0" />
+              <div>
+                <p className="text-xs text-gray-500">Available</p>
+                <p className={`text-lg font-bold ${product.availableQuantity <= 0 ? 'text-red-600' : product.availableQuantity < minStock ? 'text-amber-600' : 'text-gray-900'}`}>{product.availableQuantity}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 p-3 bg-gray-50 rounded-lg">
+              <ShoppingBag size={18} className="text-terracotta-600 shrink-0" />
+              <div>
+                <p className="text-xs text-gray-500">Total Orders</p>
+                <p className="text-lg font-bold text-gray-900">{product.totalOrders}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 p-3 bg-gray-50 rounded-lg">
+              <TrendingUp size={18} className="text-green-600 shrink-0" />
+              <div>
+                <p className="text-xs text-gray-500">Revenue</p>
+                <p className="text-lg font-bold text-gray-900">{formatCurrency(product.totalRevenue)}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 p-3 bg-gray-50 rounded-lg">
+              <RotateCcw size={18} className="text-red-600 shrink-0" />
+              <div>
+                <p className="text-xs text-gray-500">Return Rate</p>
+                <p className="text-lg font-bold text-gray-900">{formatPercent(product.returnRate * 100)}</p>
+              </div>
+            </div>
+          </div>
 
-            {/* Action buttons: Edit Details + Archive */}
-            <div className="flex gap-2 flex-wrap">
+          {/* ─── Stock Management Section (full-width) ─── */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Boxes size={16} className="text-terracotta-600" /> Stock Management
+              </h3>
               <button
-                onClick={startEditing}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                onClick={openStockModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 font-medium"
               >
-                <Pencil size={14} /> Edit Details
-              </button>
-              <button
-                onClick={handleArchive}
-                disabled={archiving}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 hover:text-amber-700 hover:border-amber-300 disabled:opacity-50"
-              >
-                <Archive size={14} /> {archiving ? 'Archiving...' : 'Archive'}
+                Manage Stock
               </button>
             </div>
 
-            {/* Badges */}
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-terracotta-100 text-terracotta-800">
-                {product.category}
-              </span>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                {product.subCategory}
-              </span>
-              <StockBadge quantity={product.availableQuantity} minStock={minStock} />
-            </div>
-
-            {/* Description */}
-            {product.productDescription && (
-              <p className="text-sm text-gray-600 leading-relaxed">{product.productDescription}</p>
+            {/* Last activity */}
+            {lastAudit ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <History size={12} className="shrink-0" />
+                <span>
+                  Last: <ChangeTypeBadge type={lastAudit.changeType} />
+                  {' '}
+                  <span className={`font-semibold ${lastAudit.delta > 0 ? 'text-green-700' : 'text-red-700'}`}>
+                    {lastAudit.delta > 0 ? '+' : ''}{lastAudit.delta}
+                  </span>
+                  {' '}({lastAudit.previousQty} → {lastAudit.newQty})
+                  {' · '}{formatDateTime(lastAudit.changedAt)}
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">No stock changes recorded yet</p>
             )}
 
-            {/* Price card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-              <div className="flex items-center gap-4">
-                <div>
-                  <p className="text-xs text-gray-500 font-medium">Selling Price</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(product.sellingPrice)}</p>
-                </div>
-                <div className="border-l border-gray-200 pl-4">
-                  <p className="text-xs text-gray-500 font-medium">Cost Price</p>
-                  <p className="text-lg font-semibold text-gray-600">{formatCurrency(product.productCost)}</p>
-                </div>
-                {product.sellingPrice > product.productCost && (
-                  <span className="text-xs font-medium text-green-700 bg-green-50 px-2.5 py-1 rounded-full self-center ml-auto">
-                    {formatPercent(((product.sellingPrice - product.productCost) / product.productCost) * 100)} margin
-                  </span>
-                )}
+            {/* Alerts */}
+            {(isLowStock || isOutOfStock) && (
+              <button onClick={openStockModal}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs ${
+                  isOutOfStock ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-800'
+                }`}>
+                <AlertTriangle size={14} className="shrink-0" />
+                <span className="flex-1 font-medium">
+                  {isOutOfStock ? 'Out of stock' : 'Low stock'}
+                  {' — '}{product.availableQuantity} unit{product.availableQuantity === 1 ? '' : 's'} available
+                  {!isOutOfStock && <>, minimum is {minStock}</>}
+                </span>
+                <span className="font-medium opacity-70">Restock →</span>
+              </button>
+            )}
+            {isAboveMax && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 text-blue-800 text-xs">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span className="font-medium">
+                  Stock ({product.instockQuantity}) exceeds max target ({maxStock})
+                </span>
               </div>
-            </div>
-
-            {/* Stats grid */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <Package size={18} className="text-blue-600 shrink-0" />
-                <div>
-                  <p className="text-xs text-gray-500">In Stock</p>
-                  <p className="text-lg font-bold text-gray-900">{product.instockQuantity}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg" title={`${product.quantityInActiveOrders || 0} unit(s) committed across active orders`}>
-                <Clock size={18} className="text-amber-600 shrink-0" />
-                <div>
-                  <p className="text-xs text-gray-500">Active Orders</p>
-                  <p className="text-lg font-bold text-amber-700">
-                    {product.activeOrderCount || 0}
-                    {(product.quantityInActiveOrders || 0) !== (product.activeOrderCount || 0) && (
-                      <span className="text-xs font-normal text-amber-600 ml-1">({product.quantityInActiveOrders} units)</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg" title={`In Stock (${product.instockQuantity}) − Active Units (${product.quantityInActiveOrders || 0})`}>
-                <BoxSelect size={18} className="text-purple-600 shrink-0" />
-                <div>
-                  <p className="text-xs text-gray-500">Available</p>
-                  <p className={`text-lg font-bold ${product.availableQuantity <= 0 ? 'text-red-600' : product.availableQuantity < minStock ? 'text-amber-600' : 'text-gray-900'}`}>{product.availableQuantity}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <ShoppingBag size={18} className="text-terracotta-600 shrink-0" />
-                <div>
-                  <p className="text-xs text-gray-500">Total Orders</p>
-                  <p className="text-lg font-bold text-gray-900">{product.totalOrders}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <TrendingUp size={18} className="text-green-600 shrink-0" />
-                <div>
-                  <p className="text-xs text-gray-500">Revenue</p>
-                  <p className="text-lg font-bold text-gray-900">{formatCurrency(product.totalRevenue)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <RotateCcw size={18} className="text-red-600 shrink-0" />
-                <div>
-                  <p className="text-xs text-gray-500">Return Rate</p>
-                  <p className="text-lg font-bold text-gray-900">{formatPercent(product.returnRate * 100)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* ─── Stock Management Section ─── */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                  <Boxes size={16} className="text-terracotta-600" /> Stock Management
-                </h3>
-                <button
-                  onClick={openStockModal}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 font-medium"
-                >
-                  Manage Stock
-                </button>
-              </div>
-
-              {/* Last activity */}
-              {lastAudit ? (
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <History size={12} className="shrink-0" />
-                  <span>
-                    Last: <ChangeTypeBadge type={lastAudit.changeType} />
-                    {' '}
-                    <span className={`font-semibold ${lastAudit.delta > 0 ? 'text-green-700' : 'text-red-700'}`}>
-                      {lastAudit.delta > 0 ? '+' : ''}{lastAudit.delta}
-                    </span>
-                    {' '}({lastAudit.previousQty} → {lastAudit.newQty})
-                    {' · '}{formatDateTime(lastAudit.changedAt)}
-                  </span>
-                </div>
-              ) : (
-                <p className="text-xs text-gray-400">No stock changes recorded yet</p>
-              )}
-
-              {/* Stock threshold pills */}
-              <div className="flex gap-2 text-xs text-gray-500">
-                <span className="px-2 py-0.5 bg-gray-100 rounded">Min {minStock}</span>
-                <span className="px-2 py-0.5 bg-gray-100 rounded">Max {maxStock > 0 ? maxStock : '—'}</span>
-              </div>
-
-              {/* Alerts */}
-              {(isLowStock || isOutOfStock) && (
-                <button onClick={openStockModal}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs ${
-                    isOutOfStock ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-800'
-                  }`}>
-                  <AlertTriangle size={14} className="shrink-0" />
-                  <span className="flex-1 font-medium">
-                    {isOutOfStock ? 'Out of stock' : 'Low stock'}
-                    {' — '}{product.availableQuantity} unit{product.availableQuantity === 1 ? '' : 's'} available
-                    {!isOutOfStock && <>, minimum is {minStock}</>}
-                  </span>
-                  <span className="font-medium opacity-70">Restock →</span>
-                </button>
-              )}
-              {isAboveMax && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 text-blue-800 text-xs">
-                  <AlertTriangle size={14} className="shrink-0" />
-                  <span className="font-medium">
-                    Stock ({product.instockQuantity}) exceeds max target ({maxStock})
-                  </span>
-                </div>
-              )}
-            </div>
+            )}
           </div>
-        </div>
+        </>
       )}
 
       {/* ─── Orders Table ─── */}
