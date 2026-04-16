@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Package, ShoppingBag, RotateCcw, TrendingUp, Pencil, X, Check, Archive, Clock, BoxSelect, Boxes, AlertTriangle, Plus, Minus, History } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
@@ -11,6 +11,7 @@ import ProductImage from '../components/ProductImage';
 import DetailOverlay from '../components/DetailOverlay';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
+import Toast from '../components/Toast';
 
 const ADD_REASONS = ['New purchase', 'Supplier delivery', 'Return to inventory', 'Inventory correction', 'Other'];
 const SUBTRACT_REASONS = ['Damaged goods', 'Shrinkage', 'Physical recount', 'Inventory correction', 'Other'];
@@ -41,6 +42,10 @@ export default function ProductDetail() {
   const [stockError, setStockError] = useState('');
   const [auditEntries, setAuditEntries] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
+
+  // Toast
+  const [toast, setToast] = useState(null);
+  const clearToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
     setLoading(true);
@@ -132,8 +137,10 @@ export default function ProductDetail() {
       await updateProduct(articleId, updates);
       setProduct(prev => ({ ...prev, ...updates }));
       setEditing(false);
+      setToast({ type: 'success', message: 'Product details updated successfully' });
     } catch (err) {
       setEditError(err.message);
+      setToast({ type: 'error', message: err.message || 'Failed to save changes' });
     } finally {
       setSaving(false);
     }
@@ -174,14 +181,17 @@ export default function ProductDetail() {
       setProduct(prev => ({
         ...prev,
         instockQuantity: updated.instockQuantity,
-        availableQuantity: updated.instockQuantity - (prev.quantityInActiveOrders || 0),
+        availableQuantity: updated.instockQuantity,
       }));
+      const absQty = Math.abs(delta);
+      setToast({ type: 'success', message: `Stock ${stockDirection === '+' ? 'increased' : 'reduced'} by ${absQty} unit${absQty !== 1 ? 's' : ''}` });
       setStockQty('');
       setStockCustomReason('');
       setStockTab('audit');
       loadAudit();
     } catch (err) {
       setStockError(err.message);
+      setToast({ type: 'error', message: err.message || 'Failed to adjust stock' });
     } finally {
       setStockSaving(false);
     }
@@ -203,72 +213,8 @@ export default function ProductDetail() {
     <DetailOverlay fallback="/inventory" title={product.productName}>
     <div className="p-4 md:p-6 space-y-5">
 
-      {/* ─── Edit Mode ─── */}
-      {editing ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-6 space-y-4">
-          {editError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{editError}</p>}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Product Name</label>
-              <input type="text" value={editForm.productName} onChange={e => setEditForm({ ...editForm, productName: e.target.value })}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-full" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Category</label>
-                <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value, subCategory: '' })}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
-                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Sub Category</label>
-                <select value={editForm.subCategory} onChange={e => setEditForm({ ...editForm, subCategory: e.target.value })}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
-                  <option value="">Select</option>
-                  {(categorySubCategories[editForm.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-2xl">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Cost Price</label>
-              <input type="number" min="0" step="0.01" value={editForm.productCost} onChange={e => setEditForm({ ...editForm, productCost: e.target.value })}
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Selling Price</label>
-              <input type="number" min="0" step="0.01" value={editForm.sellingPrice} onChange={e => setEditForm({ ...editForm, sellingPrice: e.target.value })}
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
-            </div>
-            <div title="Warn when stock goes below this level">
-              <label className="block text-xs text-gray-500 mb-1">Min Stock</label>
-              <input type="number" min="0" value={editForm.minStock} onChange={e => setEditForm({ ...editForm, minStock: e.target.value })}
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
-            </div>
-            <div title="Target max stock. 0 = no cap">
-              <label className="block text-xs text-gray-500 mb-1">Max Stock</label>
-              <input type="number" min="0" value={editForm.maxStock} onChange={e => setEditForm({ ...editForm, maxStock: e.target.value })}
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
-            </div>
-          </div>
-          <p className="text-xs text-gray-500">
-            Stock quantity is managed separately — use <strong>Manage Stock</strong> to add or remove units.
-          </p>
-          <ImageUpload images={editForm.imageUrls} onChange={(urls) => setEditForm({ ...editForm, imageUrls: urls })} />
-          <div className="flex gap-2 pt-1">
-            <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
-              <Check size={14} />{saving ? 'Saving...' : 'Save'}
-            </button>
-            <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
-              <X size={14} />Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* ─── View Mode ─── */
-        <>
+      {/* ─── View Mode (always shown) ─── */}
+      <>
           {/* ─── Hero: Gallery left + Product Info right on desktop ─── */}
           <div className="flex flex-col md:flex-row gap-5">
             {/* Left — Image Gallery */}
@@ -453,10 +399,8 @@ export default function ProductDetail() {
             )}
           </div>
         </>
-      )}
 
       {/* ─── Orders Table ─── */}
-      {!editing && (
         <div>
           <h2 className="text-lg font-semibold text-gray-900 mb-3">
             Order History ({product.orders.length})
@@ -500,8 +444,92 @@ export default function ProductDetail() {
             </div>
           )}
         </div>
-      )}
     </div>
+
+    {/* ─── Toast ─── */}
+    <Toast toast={toast} onClose={clearToast} />
+
+    {/* ─── Edit Details Modal ─── */}
+    {editing && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditing(false)}>
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Pencil size={18} className="text-terracotta-600" /> Edit Product Details
+            </h2>
+            <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-600">
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-auto p-5 space-y-4">
+            {editError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{editError}</p>}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Product Name</label>
+                <input type="text" value={editForm.productName} onChange={e => setEditForm({ ...editForm, productName: e.target.value })}
+                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-full" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Category</label>
+                  <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value, subCategory: '' })}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Sub Category</label>
+                  <select value={editForm.subCategory} onChange={e => setEditForm({ ...editForm, subCategory: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
+                    <option value="">Select</option>
+                    {(categorySubCategories[editForm.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Cost Price</label>
+                <input type="number" min="0" step="0.01" value={editForm.productCost} onChange={e => setEditForm({ ...editForm, productCost: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Selling Price</label>
+                <input type="number" min="0" step="0.01" value={editForm.sellingPrice} onChange={e => setEditForm({ ...editForm, sellingPrice: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
+              </div>
+              <div title="Warn when stock goes below this level">
+                <label className="block text-xs text-gray-500 mb-1">Min Stock</label>
+                <input type="number" min="0" value={editForm.minStock} onChange={e => setEditForm({ ...editForm, minStock: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
+              </div>
+              <div title="Target max stock. 0 = no cap">
+                <label className="block text-xs text-gray-500 mb-1">Max Stock</label>
+                <input type="number" min="0" value={editForm.maxStock} onChange={e => setEditForm({ ...editForm, maxStock: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">
+              Stock quantity is managed separately — use <strong>Manage Stock</strong> to add or remove units.
+            </p>
+            <ImageUpload images={editForm.imageUrls} onChange={(urls) => setEditForm({ ...editForm, imageUrls: urls })} />
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-2">
+            <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+              <X size={14} /> Cancel
+            </button>
+            <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
+              <Check size={14} /> {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* ─── Manage Stock Modal ─── */}
     {stockModalOpen && (
