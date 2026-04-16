@@ -3,9 +3,8 @@ const router = express.Router();
 const {
   getAllInventory, getProductByArticleId, getAllOrders,
   addProduct, updateProduct, archiveProduct, unarchiveProduct, deleteProduct,
+  adjustStock, getInventoryAuditHistory,
 } = require('../services/sheets');
-
-const LOW_STOCK_THRESHOLD = 5;
 
 // An order is ACTIVE unless it has reached a terminal state.
 // Anything that's not Delivered / Returned / Cancelled / Refunded is active.
@@ -38,7 +37,7 @@ router.get('/summary', async (req, res) => {
 
     const totalProducts = activeProducts.length;
     const totalInventoryValue = activeProducts.reduce((sum, p) => sum + (p.productCost * p.instockQuantity), 0);
-    const lowStockCount = activeProducts.filter(p => p.availableQuantity > 0 && p.availableQuantity < LOW_STOCK_THRESHOLD).length;
+    const lowStockCount = activeProducts.filter(p => p.availableQuantity > 0 && p.availableQuantity < (p.minStock || 5)).length;
     const outOfStockCount = activeProducts.filter(p => p.instockQuantity === 0).length;
 
     const categoryBreakdown = {};
@@ -58,11 +57,18 @@ router.get('/summary', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { sheetId } = req.user;
-    const { productName, category, subCategory, productCost, sellingPrice, instockQuantity, productDescription, productImages } = req.body;
+    const { productName, category, subCategory, productCost, sellingPrice, instockQuantity, productDescription, productImages, minStock, maxStock } = req.body;
     if (!productName || !category || !subCategory || productCost === undefined || instockQuantity === undefined) {
       return res.status(400).json({ success: false, error: 'Product name, category, sub-category, cost, and instock quantity are required' });
     }
-    const newProduct = await addProduct(sheetId, { productName, productDescription, category, subCategory, productImages, productCost: parseFloat(productCost), sellingPrice: parseFloat(sellingPrice) || 0, instockQuantity: parseInt(instockQuantity) });
+    const newProduct = await addProduct(sheetId, {
+      productName, productDescription, category, subCategory, productImages,
+      productCost: parseFloat(productCost),
+      sellingPrice: parseFloat(sellingPrice) || 0,
+      instockQuantity: parseInt(instockQuantity),
+      minStock: minStock !== undefined ? parseInt(minStock) : undefined,
+      maxStock: maxStock !== undefined ? parseInt(maxStock) : undefined,
+    });
     res.json({ success: true, data: newProduct });
   } catch (error) {
     console.error('Error adding product:', error.message);
@@ -207,11 +213,48 @@ router.patch('/:articleId', async (req, res) => {
     if (updates.productCost !== undefined) updates.productCost = parseFloat(updates.productCost);
     if (updates.sellingPrice !== undefined) updates.sellingPrice = parseFloat(updates.sellingPrice);
     if (updates.instockQuantity !== undefined) updates.instockQuantity = parseInt(updates.instockQuantity);
+    if (updates.minStock !== undefined) updates.minStock = parseInt(updates.minStock);
+    if (updates.maxStock !== undefined) updates.maxStock = parseInt(updates.maxStock);
     const updated = await updateProduct(sheetId, articleId, updates);
     res.json({ success: true, data: updated });
   } catch (error) {
     console.error('Error updating product:', error.message);
     res.status(error.message.includes('not found') ? 404 : 500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /:articleId/stock — manual restock/adjust with audit entry
+router.post('/:articleId/stock', async (req, res) => {
+  try {
+    const { sheetId } = req.user;
+    const articleId = decodeURIComponent(req.params.articleId);
+    const { delta, reason, changeType } = req.body;
+    const deltaNum = parseInt(delta);
+    if (!Number.isFinite(deltaNum) || deltaNum === 0) {
+      return res.status(400).json({ success: false, error: 'delta is required and must be a non-zero integer' });
+    }
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({ success: false, error: 'reason is required' });
+    }
+    const resolvedType = changeType === 'restock' || changeType === 'adjust' ? changeType : (deltaNum > 0 ? 'restock' : 'adjust');
+    const updated = await adjustStock(sheetId, articleId, { delta: deltaNum, reason: String(reason).trim(), changeType: resolvedType });
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('Error adjusting stock:', error.message);
+    res.status(error.message.includes('not found') ? 404 : 500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /:articleId/stock-audit — inventory audit history for a product
+router.get('/:articleId/stock-audit', async (req, res) => {
+  try {
+    const { sheetId } = req.user;
+    const articleId = decodeURIComponent(req.params.articleId);
+    const entries = await getInventoryAuditHistory(sheetId, articleId);
+    res.json({ success: true, data: entries });
+  } catch (error) {
+    console.error('Error fetching stock audit:', error.message);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

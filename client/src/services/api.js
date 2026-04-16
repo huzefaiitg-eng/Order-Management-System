@@ -191,6 +191,17 @@ export function deleteProduct(articleId) {
   return request(`/inventory/${encodeURIComponent(articleId)}`, { method: 'DELETE' });
 }
 
+export function adjustStock(articleId, { delta, reason, changeType }) {
+  return request(`/inventory/${encodeURIComponent(articleId)}/stock`, {
+    method: 'POST',
+    body: JSON.stringify({ delta, reason, changeType }),
+  });
+}
+
+export function fetchStockAudit(articleId) {
+  return request(`/inventory/${encodeURIComponent(articleId)}/stock-audit`);
+}
+
 // Upload
 export async function uploadImage(file) {
   const token = getToken();

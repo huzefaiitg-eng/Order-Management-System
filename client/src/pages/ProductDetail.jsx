@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Package, ShoppingBag, IndianRupee, RotateCcw, TrendingUp, Pencil, X, Check, Archive, Clock, BoxSelect } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Package, ShoppingBag, RotateCcw, TrendingUp, Pencil, X, Check, Archive, Clock, BoxSelect, Boxes, AlertTriangle, Plus, Minus, History } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
-import { fetchProductByArticleId, updateProduct, archiveProduct } from '../services/api';
+import { fetchProductByArticleId, updateProduct, archiveProduct, adjustStock, fetchStockAudit } from '../services/api';
 import { formatCurrency, formatPercent } from '../utils/formatters';
 import { useCategories } from '../hooks/useCategories';
 import StockBadge from '../components/StockBadge';
@@ -12,6 +12,9 @@ import DetailOverlay from '../components/DetailOverlay';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 
+const ADD_REASONS = ['New purchase', 'Supplier delivery', 'Return to inventory', 'Inventory correction', 'Other'];
+const SUBTRACT_REASONS = ['Damaged goods', 'Shrinkage', 'Physical recount', 'Inventory correction', 'Other'];
+
 export default function ProductDetail() {
   const { articleId } = useParams();
   const navigate = useNavigate();
@@ -20,12 +23,24 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Edit mode
+  // Edit mode (product details — no stock qty)
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [archiving, setArchiving] = useState(false);
+
+  // Manage Stock modal
+  const [stockModalOpen, setStockModalOpen] = useState(false);
+  const [stockTab, setStockTab] = useState('adjust'); // 'adjust' | 'audit'
+  const [stockDirection, setStockDirection] = useState('+'); // '+' | '-'
+  const [stockQty, setStockQty] = useState('');
+  const [stockReason, setStockReason] = useState(ADD_REASONS[0]);
+  const [stockCustomReason, setStockCustomReason] = useState('');
+  const [stockSaving, setStockSaving] = useState(false);
+  const [stockError, setStockError] = useState('');
+  const [auditEntries, setAuditEntries] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -34,6 +49,39 @@ export default function ProductDetail() {
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, [articleId]);
+
+  // Load audit on mount for the stock context section
+  useEffect(() => {
+    fetchStockAudit(articleId)
+      .then(setAuditEntries)
+      .catch(() => {});
+  }, [articleId]);
+
+  const loadAudit = () => {
+    setAuditLoading(true);
+    fetchStockAudit(articleId)
+      .then(setAuditEntries)
+      .catch(err => setStockError(err.message))
+      .finally(() => setAuditLoading(false));
+  };
+
+  const openStockModal = () => {
+    setStockTab('adjust');
+    setStockDirection('+');
+    setStockQty('');
+    setStockReason(ADD_REASONS[0]);
+    setStockCustomReason('');
+    setStockError('');
+    setStockModalOpen(true);
+    loadAudit();
+  };
+
+  const handleDirectionChange = (dir) => {
+    setStockDirection(dir);
+    // Reset reason to first option of new direction
+    setStockReason(dir === '+' ? ADD_REASONS[0] : SUBTRACT_REASONS[0]);
+    setStockCustomReason('');
+  };
 
   const handleArchive = async () => {
     if (!window.confirm(`Archive "${product.productName}"? It will be moved to the archived list.`)) return;
@@ -54,7 +102,8 @@ export default function ProductDetail() {
       subCategory: product.subCategory,
       productCost: product.productCost,
       sellingPrice: product.sellingPrice,
-      instockQuantity: product.instockQuantity,
+      minStock: product.minStock ?? 5,
+      maxStock: product.maxStock ?? 0,
       imageUrls: product.productImages ? product.productImages.split(',').map(u => u.trim()).filter(Boolean) : [],
     });
     setEditing(true);
@@ -70,26 +119,18 @@ export default function ProductDetail() {
     setEditError('');
     try {
       const productImages = editForm.imageUrls.join(',');
-      await updateProduct(articleId, {
+      const updates = {
         productName: editForm.productName,
         category: editForm.category,
         subCategory: editForm.subCategory,
         productCost: parseFloat(editForm.productCost),
         sellingPrice: parseFloat(editForm.sellingPrice),
-        instockQuantity: parseInt(editForm.instockQuantity),
+        minStock: parseInt(editForm.minStock) || 0,
+        maxStock: parseInt(editForm.maxStock) || 0,
         productImages,
-      });
-      setProduct(prev => ({
-        ...prev,
-        productName: editForm.productName,
-        category: editForm.category,
-        subCategory: editForm.subCategory,
-        productCost: parseFloat(editForm.productCost),
-        sellingPrice: parseFloat(editForm.sellingPrice),
-        instockQuantity: parseInt(editForm.instockQuantity),
-        availableQuantity: parseInt(editForm.instockQuantity) - prev.quantityInActiveOrders,
-        productImages,
-      }));
+      };
+      await updateProduct(articleId, updates);
+      setProduct(prev => ({ ...prev, ...updates }));
       setEditing(false);
     } catch (err) {
       setEditError(err.message);
@@ -98,9 +139,65 @@ export default function ProductDetail() {
     }
   };
 
+  const handleStockSubmit = async () => {
+    setStockError('');
+    const raw = parseInt(stockQty);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      setStockError('Enter a positive number');
+      return;
+    }
+    const delta = stockDirection === '+' ? raw : -raw;
+    const reason = stockReason === 'Other' ? stockCustomReason.trim() : stockReason;
+    if (!reason) {
+      setStockError('Reason is required');
+      return;
+    }
+
+    // Max stock warning on addition
+    if (stockDirection === '+' && product.maxStock > 0) {
+      const projected = product.instockQuantity + raw;
+      if (projected > product.maxStock) {
+        const ok = window.confirm(
+          `This will bring stock to ${projected} units, above your Max Stock target of ${product.maxStock}. Continue?`
+        );
+        if (!ok) return;
+      }
+    }
+
+    setStockSaving(true);
+    try {
+      const updated = await adjustStock(articleId, {
+        delta,
+        reason,
+        changeType: stockDirection === '+' ? 'restock' : 'adjust',
+      });
+      setProduct(prev => ({
+        ...prev,
+        instockQuantity: updated.instockQuantity,
+        availableQuantity: updated.instockQuantity - (prev.quantityInActiveOrders || 0),
+      }));
+      setStockQty('');
+      setStockCustomReason('');
+      setStockTab('audit');
+      loadAudit();
+    } catch (err) {
+      setStockError(err.message);
+    } finally {
+      setStockSaving(false);
+    }
+  };
+
   if (loading) return <DetailOverlay fallback="/inventory"><Loader /></DetailOverlay>;
   if (error) return <DetailOverlay fallback="/inventory"><ErrorMessage message={error} /></DetailOverlay>;
   if (!product) return null;
+
+  const minStock = product.minStock ?? 5;
+  const maxStock = product.maxStock ?? 0;
+  const isLowStock = product.availableQuantity > 0 && product.availableQuantity < minStock;
+  const isOutOfStock = product.availableQuantity <= 0;
+  const isAboveMax = maxStock > 0 && product.instockQuantity > maxStock;
+  const lastAudit = auditEntries.length > 0 ? auditEntries[auditEntries.length - 1] : null;
+  const reasonOptions = stockDirection === '+' ? ADD_REASONS : SUBTRACT_REASONS;
 
   return (
     <DetailOverlay fallback="/inventory" title={product.productName}>
@@ -134,7 +231,7 @@ export default function ProductDetail() {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3 max-w-sm">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-2xl">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Cost Price</label>
               <input type="number" min="0" step="0.01" value={editForm.productCost} onChange={e => setEditForm({ ...editForm, productCost: e.target.value })}
@@ -145,12 +242,20 @@ export default function ProductDetail() {
               <input type="number" min="0" step="0.01" value={editForm.sellingPrice} onChange={e => setEditForm({ ...editForm, sellingPrice: e.target.value })}
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Instock Qty</label>
-              <input type="number" min="0" value={editForm.instockQuantity} onChange={e => setEditForm({ ...editForm, instockQuantity: e.target.value })}
+            <div title="Warn when stock goes below this level">
+              <label className="block text-xs text-gray-500 mb-1">Min Stock</label>
+              <input type="number" min="0" value={editForm.minStock} onChange={e => setEditForm({ ...editForm, minStock: e.target.value })}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
+            </div>
+            <div title="Target max stock. 0 = no cap">
+              <label className="block text-xs text-gray-500 mb-1">Max Stock</label>
+              <input type="number" min="0" value={editForm.maxStock} onChange={e => setEditForm({ ...editForm, maxStock: e.target.value })}
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" />
             </div>
           </div>
+          <p className="text-xs text-gray-500">
+            Stock quantity is managed separately — use <strong>Manage Stock</strong> to add or remove units.
+          </p>
           <ImageUpload images={editForm.imageUrls} onChange={(urls) => setEditForm({ ...editForm, imageUrls: urls })} />
           <div className="flex gap-2 pt-1">
             <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
@@ -171,18 +276,27 @@ export default function ProductDetail() {
 
           {/* Right — Product Info */}
           <div className="w-full md:w-1/2 space-y-4">
-            {/* Name + actions */}
+            {/* Name */}
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl md:text-2xl font-bold text-gray-900">{product.productName}</h1>
-                <button onClick={startEditing} className="text-gray-400 hover:text-terracotta-600 transition-colors" title="Edit product">
-                  <Pencil size={16} />
-                </button>
-                <button onClick={handleArchive} disabled={archiving} className="text-gray-400 hover:text-amber-600 transition-colors disabled:opacity-50" title="Archive product">
-                  <Archive size={16} />
-                </button>
-              </div>
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900">{product.productName}</h1>
               <p className="text-xs font-mono text-gray-400 mt-0.5">{product.articleId}</p>
+            </div>
+
+            {/* Action buttons: Edit Details + Archive */}
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={startEditing}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                <Pencil size={14} /> Edit Details
+              </button>
+              <button
+                onClick={handleArchive}
+                disabled={archiving}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 hover:text-amber-700 hover:border-amber-300 disabled:opacity-50"
+              >
+                <Archive size={14} /> {archiving ? 'Archiving...' : 'Archive'}
+              </button>
             </div>
 
             {/* Badges */}
@@ -193,7 +307,7 @@ export default function ProductDetail() {
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                 {product.subCategory}
               </span>
-              <StockBadge quantity={product.availableQuantity} />
+              <StockBadge quantity={product.availableQuantity} minStock={minStock} />
             </div>
 
             {/* Description */}
@@ -245,7 +359,7 @@ export default function ProductDetail() {
                 <BoxSelect size={18} className="text-purple-600 shrink-0" />
                 <div>
                   <p className="text-xs text-gray-500">Available</p>
-                  <p className={`text-lg font-bold ${product.availableQuantity <= 0 ? 'text-red-600' : product.availableQuantity < 5 ? 'text-amber-600' : 'text-gray-900'}`}>{product.availableQuantity}</p>
+                  <p className={`text-lg font-bold ${product.availableQuantity <= 0 ? 'text-red-600' : product.availableQuantity < minStock ? 'text-amber-600' : 'text-gray-900'}`}>{product.availableQuantity}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
@@ -269,6 +383,69 @@ export default function ProductDetail() {
                   <p className="text-lg font-bold text-gray-900">{formatPercent(product.returnRate * 100)}</p>
                 </div>
               </div>
+            </div>
+
+            {/* ─── Stock Management Section ─── */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                  <Boxes size={16} className="text-terracotta-600" /> Stock Management
+                </h3>
+                <button
+                  onClick={openStockModal}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 font-medium"
+                >
+                  Manage Stock
+                </button>
+              </div>
+
+              {/* Last activity */}
+              {lastAudit ? (
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <History size={12} className="shrink-0" />
+                  <span>
+                    Last: <ChangeTypeBadge type={lastAudit.changeType} />
+                    {' '}
+                    <span className={`font-semibold ${lastAudit.delta > 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {lastAudit.delta > 0 ? '+' : ''}{lastAudit.delta}
+                    </span>
+                    {' '}({lastAudit.previousQty} → {lastAudit.newQty})
+                    {' · '}{formatDateTime(lastAudit.changedAt)}
+                  </span>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">No stock changes recorded yet</p>
+              )}
+
+              {/* Stock threshold pills */}
+              <div className="flex gap-2 text-xs text-gray-500">
+                <span className="px-2 py-0.5 bg-gray-100 rounded">Min {minStock}</span>
+                <span className="px-2 py-0.5 bg-gray-100 rounded">Max {maxStock > 0 ? maxStock : '—'}</span>
+              </div>
+
+              {/* Alerts */}
+              {(isLowStock || isOutOfStock) && (
+                <button onClick={openStockModal}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs ${
+                    isOutOfStock ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-800'
+                  }`}>
+                  <AlertTriangle size={14} className="shrink-0" />
+                  <span className="flex-1 font-medium">
+                    {isOutOfStock ? 'Out of stock' : 'Low stock'}
+                    {' — '}{product.availableQuantity} unit{product.availableQuantity === 1 ? '' : 's'} available
+                    {!isOutOfStock && <>, minimum is {minStock}</>}
+                  </span>
+                  <span className="font-medium opacity-70">Restock →</span>
+                </button>
+              )}
+              {isAboveMax && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 text-blue-800 text-xs">
+                  <AlertTriangle size={14} className="shrink-0" />
+                  <span className="font-medium">
+                    Stock ({product.instockQuantity}) exceeds max target ({maxStock})
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -321,6 +498,199 @@ export default function ProductDetail() {
         </div>
       )}
     </div>
+
+    {/* ─── Manage Stock Modal ─── */}
+    {stockModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setStockModalOpen(false)}>
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Boxes size={18} className="text-terracotta-600" /> Manage Stock
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Current: <span className="font-semibold text-gray-700">{product.instockQuantity}</span> in stock
+                {' · '}<span className="font-semibold text-gray-700">{product.availableQuantity}</span> available
+                {maxStock > 0 && <> · Max: <span className="font-semibold text-gray-700">{maxStock}</span></>}
+              </p>
+            </div>
+            <button onClick={() => setStockModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-gray-200">
+            {[
+              { key: 'adjust', label: 'Adjust Stock', icon: Boxes },
+              { key: 'audit', label: 'Audit Trail', icon: History },
+            ].map(t => (
+              <button
+                key={t.key}
+                onClick={() => { setStockTab(t.key); setStockError(''); if (t.key === 'audit') loadAudit(); }}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  stockTab === t.key
+                    ? 'border-terracotta-600 text-terracotta-700 bg-terracotta-50/30'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <t.icon size={14} /> {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-auto p-5">
+            {stockError && (
+              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg mb-3">{stockError}</p>
+            )}
+
+            {stockTab === 'adjust' && (
+              <div className="space-y-4">
+                {/* +/- toggle + quantity input */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1.5">Quantity</label>
+                  <div className="flex items-stretch gap-0">
+                    {/* +/- button group */}
+                    <div className="flex rounded-l-lg border border-gray-300 border-r-0 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => handleDirectionChange('+')}
+                        className={`px-3.5 py-2 text-sm font-bold transition-colors ${
+                          stockDirection === '+'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-white text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Plus size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDirectionChange('-')}
+                        className={`px-3.5 py-2 text-sm font-bold border-l border-gray-300 transition-colors ${
+                          stockDirection === '-'
+                            ? 'bg-red-600 text-white'
+                            : 'bg-white text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Minus size={16} />
+                      </button>
+                    </div>
+                    {/* Number input */}
+                    <input
+                      type="number"
+                      min="1"
+                      value={stockQty}
+                      onChange={e => setStockQty(e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder="Enter quantity"
+                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 min-w-0"
+                    />
+                  </div>
+                  {stockQty && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      New stock: {product.instockQuantity} {stockDirection === '+' ? '+' : '−'} {stockQty} = <span className="font-semibold text-gray-600">{Math.max(0, product.instockQuantity + (stockDirection === '+' ? parseInt(stockQty) || 0 : -(parseInt(stockQty) || 0)))}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Reason dropdown */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1.5">Reason</label>
+                  <select
+                    value={stockReason}
+                    onChange={e => setStockReason(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500"
+                  >
+                    {reasonOptions.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+
+                {/* Custom reason text for "Other" */}
+                {stockReason === 'Other' && (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1.5">Specify reason</label>
+                    <input
+                      type="text"
+                      value={stockCustomReason}
+                      onChange={e => setStockCustomReason(e.target.value)}
+                      placeholder="e.g. Damaged in transit"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500"
+                    />
+                  </div>
+                )}
+
+                {/* Submit */}
+                <button
+                  onClick={handleStockSubmit}
+                  disabled={stockSaving || !stockQty}
+                  className={`flex items-center gap-1.5 px-4 py-2 text-sm text-white rounded-lg disabled:opacity-50 ${
+                    stockDirection === '+' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                  }`}
+                >
+                  {stockDirection === '+' ? <Plus size={14} /> : <Minus size={14} />}
+                  {stockSaving ? 'Saving...' : stockDirection === '+' ? 'Add to stock' : 'Remove from stock'}
+                </button>
+              </div>
+            )}
+
+            {stockTab === 'audit' && (
+              <div>
+                {auditLoading ? (
+                  <Loader />
+                ) : auditEntries.length === 0 ? (
+                  <p className="text-sm text-gray-500">No stock changes recorded yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {[...auditEntries].reverse().map((e, i) => (
+                      <div key={i} className="border border-gray-200 rounded-lg p-3 text-sm">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <ChangeTypeBadge type={e.changeType} />
+                            <span className={`font-bold ${e.delta > 0 ? 'text-green-700' : 'text-red-700'}`}>
+                              {e.delta > 0 ? '+' : ''}{e.delta}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              ({e.previousQty} → {e.newQty})
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-400">{formatDateTime(e.changedAt)}</span>
+                        </div>
+                        {e.reason && <p className="text-xs text-gray-600 mt-1">{e.reason}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
     </DetailOverlay>
   );
+}
+
+function ChangeTypeBadge({ type }) {
+  const colors = {
+    restock: 'bg-green-100 text-green-800',
+    adjust: 'bg-blue-100 text-blue-800',
+    delivered: 'bg-purple-100 text-purple-800',
+    'delivery-reversed': 'bg-amber-100 text-amber-800',
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colors[type] || 'bg-gray-100 text-gray-700'}`}>
+      {type}
+    </span>
+  );
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '-';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+  } catch {
+    return iso;
+  }
 }

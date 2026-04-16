@@ -70,7 +70,7 @@ router.get('/', async (req, res) => {
       availableQuantity: p.instockQuantity - (activeQtyByProduct[p.productName] || 0),
     }));
     const outOfStockCount = activeInventory.filter(p => p.instockQuantity === 0).length;
-    const lowStockCount = activeInventory.filter(p => p.availableQuantity > 0 && p.availableQuantity < 5).length;
+    const lowStockCount = activeInventory.filter(p => p.availableQuantity > 0 && p.availableQuantity < (p.minStock || 5)).length;
 
     res.json({
       success: true,

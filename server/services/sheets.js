@@ -230,11 +230,17 @@ const INVENTORY_COLUMN_MAP = {
   instockQuantity: 8,
   quantityInActiveOrders: 9,
   status: 10,
+  minStock: 11,
+  maxStock: 12,
 };
 
 function rowToProduct(row, rowIndex) {
   const instockQuantity = parseInt(row[INVENTORY_COLUMN_MAP.instockQuantity]) || 0;
   const quantityInActiveOrders = parseInt(row[INVENTORY_COLUMN_MAP.quantityInActiveOrders]) || 0;
+  const rawMin = row[INVENTORY_COLUMN_MAP.minStock];
+  const rawMax = row[INVENTORY_COLUMN_MAP.maxStock];
+  const minStock = rawMin === undefined || rawMin === '' ? 5 : parseInt(rawMin) || 0;
+  const maxStock = rawMax === undefined || rawMax === '' ? 0 : parseInt(rawMax) || 0;
 
   return {
     rowIndex,
@@ -250,6 +256,8 @@ function rowToProduct(row, rowIndex) {
     quantityInActiveOrders,
     availableQuantity: instockQuantity - quantityInActiveOrders,
     status: row[INVENTORY_COLUMN_MAP.status] || 'Active',
+    minStock,
+    maxStock,
   };
 }
 
@@ -257,7 +265,7 @@ async function getAllInventory(sheetId) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'Inventory!A2:K',
+    range: 'Inventory!A2:M',
   });
 
   const rows = response.data.values || [];
@@ -269,7 +277,7 @@ async function getProductByArticleId(sheetId, articleId) {
   return products.find(p => p.articleId === articleId) || null;
 }
 
-async function addProduct(sheetId, { productName, productDescription, category, subCategory, productImages, productCost, sellingPrice, instockQuantity }) {
+async function addProduct(sheetId, { productName, productDescription, category, subCategory, productImages, productCost, sellingPrice, instockQuantity, minStock, maxStock }) {
   const products = await getAllInventory(sheetId);
 
   const maxNum = products.reduce((max, p) => {
@@ -278,13 +286,16 @@ async function addProduct(sheetId, { productName, productDescription, category, 
   }, 0);
   const newId = `ART-${String(maxNum + 1).padStart(3, '0')}`;
 
+  const resolvedMin = minStock === undefined || minStock === '' ? 5 : parseInt(minStock) || 0;
+  const resolvedMax = maxStock === undefined || maxStock === '' ? 0 : parseInt(maxStock) || 0;
+
   const sheets = await getClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: 'Inventory!A:K',
+    range: 'Inventory!A:M',
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[newId, productName, productDescription || '', category, subCategory, productImages || '', productCost, sellingPrice || 0, instockQuantity, 0, 'Active']],
+      values: [[newId, productName, productDescription || '', category, subCategory, productImages || '', productCost, sellingPrice || 0, instockQuantity, 0, 'Active', resolvedMin, resolvedMax]],
     },
   });
 
@@ -301,6 +312,8 @@ async function addProduct(sheetId, { productName, productDescription, category, 
     quantityInActiveOrders: 0,
     availableQuantity: instockQuantity,
     status: 'Active',
+    minStock: resolvedMin,
+    maxStock: resolvedMax,
   };
 }
 
@@ -321,6 +334,8 @@ async function updateProduct(sheetId, articleId, updates) {
   if (updates.productCost !== undefined) data.push({ range: `Inventory!G${rowIdx}`, values: [[updates.productCost]] });
   if (updates.sellingPrice !== undefined) data.push({ range: `Inventory!H${rowIdx}`, values: [[updates.sellingPrice]] });
   if (updates.instockQuantity !== undefined) data.push({ range: `Inventory!I${rowIdx}`, values: [[updates.instockQuantity]] });
+  if (updates.minStock !== undefined) data.push({ range: `Inventory!L${rowIdx}`, values: [[updates.minStock]] });
+  if (updates.maxStock !== undefined) data.push({ range: `Inventory!M${rowIdx}`, values: [[updates.maxStock]] });
 
   if (data.length > 0) {
     await sheets.spreadsheets.values.batchUpdate({
@@ -435,6 +450,85 @@ async function getAuditHistory(sheetId, orderRowIndex) {
       changedAt: row[3] || '',
     }))
     .sort((a, b) => new Date(a.changedAt) - new Date(b.changedAt));
+}
+
+// ── Inventory Audit ─────────────────────────────────────────
+
+async function addInventoryAuditEntry(sheetId, { articleId, productName, changeType, previousQty, newQty, reason }) {
+  const delta = (parseInt(newQty) || 0) - (parseInt(previousQty) || 0);
+  const changedAt = new Date().toISOString();
+  const sheets = await getClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: sheetId,
+    range: "'Inventory Audit'!A:H",
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [[articleId, productName, changeType, String(previousQty), String(newQty), String(delta), reason || '', changedAt]],
+    },
+  });
+  return { articleId, productName, changeType, previousQty, newQty, delta, reason: reason || '', changedAt };
+}
+
+async function getInventoryAuditHistory(sheetId, articleId) {
+  const sheets = await getClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "'Inventory Audit'!A2:H",
+  });
+
+  const rows = response.data.values || [];
+  return rows
+    .filter(row => row[0] === articleId)
+    .map(row => ({
+      articleId: row[0] || '',
+      productName: row[1] || '',
+      changeType: row[2] || '',
+      previousQty: parseInt(row[3]) || 0,
+      newQty: parseInt(row[4]) || 0,
+      delta: parseInt(row[5]) || 0,
+      reason: row[6] || '',
+      changedAt: row[7] || '',
+    }))
+    .sort((a, b) => new Date(a.changedAt) - new Date(b.changedAt));
+}
+
+async function adjustStock(sheetId, articleId, { delta, reason, changeType }) {
+  const products = await getAllInventory(sheetId);
+  const product = products.find(p => p.articleId === articleId);
+  if (!product) throw new Error('Product not found');
+
+  const previousQty = product.instockQuantity;
+  const newQty = Math.max(0, previousQty + (parseInt(delta) || 0));
+
+  const sheets = await getClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `Inventory!I${product.rowIndex}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[newQty]] },
+  });
+
+  await addInventoryAuditEntry(sheetId, {
+    articleId: product.articleId,
+    productName: product.productName,
+    changeType: changeType || 'adjust',
+    previousQty,
+    newQty,
+    reason,
+  });
+
+  return { ...product, instockQuantity: newQty, availableQuantity: newQty - product.quantityInActiveOrders };
+}
+
+async function getOrderByRowIndex(sheetId, rowIndex) {
+  const sheets = await getClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: `Orders!A${rowIndex}:N${rowIndex}`,
+  });
+  const row = (response.data.values || [])[0];
+  if (!row) return null;
+  return rowToOrder(row, rowIndex);
 }
 
 async function getSheetNames(sheetId) {
@@ -785,6 +879,7 @@ module.exports = {
   getAllInventory, getProductByArticleId, addProduct, updateProduct,
   archiveProduct, unarchiveProduct, deleteProduct,
   addAuditEntry, getAuditHistory,
+  addInventoryAuditEntry, getInventoryAuditHistory, adjustStock, getOrderByRowIndex,
   getSheetNames,
   getCategories, addCategorySetting, deleteCategorySetting, deleteCategoryAll,
 };

@@ -1,7 +1,7 @@
 import { getStockStatus, STOCK_COLORS } from '../utils/formatters';
 
-export default function StockBadge({ quantity }) {
-  const status = getStockStatus(quantity);
+export default function StockBadge({ quantity, minStock }) {
+  const status = getStockStatus(quantity, minStock);
   const colorClass = STOCK_COLORS[status] || 'bg-gray-100 text-gray-800';
 
   return (

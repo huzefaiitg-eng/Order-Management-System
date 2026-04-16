@@ -26,7 +26,7 @@ const SORT_OPTIONS = [
 
 function AddProductModal({ onClose, onAdded, categories, categorySubCategories }) {
   const [form, setForm] = useState({
-    productName: '', category: '', subCategory: '', productCost: '', sellingPrice: '', instockQuantity: '', productDescription: '', imageUrls: [],
+    productName: '', category: '', subCategory: '', productCost: '', sellingPrice: '', instockQuantity: '', productDescription: '', imageUrls: [], minStock: '5', maxStock: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -49,6 +49,8 @@ function AddProductModal({ onClose, onAdded, categories, categorySubCategories }
         productCost: parseFloat(form.productCost),
         sellingPrice: parseFloat(form.sellingPrice),
         instockQuantity: parseInt(form.instockQuantity),
+        minStock: form.minStock ? parseInt(form.minStock) : 5,
+        maxStock: form.maxStock ? parseInt(form.maxStock) : 0,
       });
       onAdded();
       onClose();
@@ -107,6 +109,20 @@ function AddProductModal({ onClose, onAdded, categories, categorySubCategories }
             <label className="block text-sm font-medium text-gray-700 mb-1">Instock Qty *</label>
             <input type="number" min="0" value={form.instockQuantity} onChange={e => setForm({ ...form, instockQuantity: e.target.value })}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="0" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Min Stock</label>
+              <input type="number" min="0" value={form.minStock} onChange={e => setForm({ ...form, minStock: e.target.value })}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="5" />
+              <p className="text-[11px] text-gray-400 mt-0.5">Low-stock alert threshold</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Max Stock</label>
+              <input type="number" min="0" value={form.maxStock} onChange={e => setForm({ ...form, maxStock: e.target.value })}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="0 = no cap" />
+              <p className="text-[11px] text-gray-400 mt-0.5">Target max (0 = no cap)</p>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -247,7 +263,7 @@ export default function Inventory() {
         return 0;
       });
     }
-    if (stockFilter === 'lowStock') return list.filter(p => p.availableQuantity > 0 && p.availableQuantity < 5);
+    if (stockFilter === 'lowStock') return list.filter(p => p.availableQuantity > 0 && p.availableQuantity < (p.minStock || 5));
     if (stockFilter === 'outOfStock') return list.filter(p => p.instockQuantity === 0);
     return list;
   }, [products, sortField, sortDir, stockFilter]);
@@ -402,7 +418,7 @@ export default function Inventory() {
                     <Archive size={14} />
                   </button>
                   <div className="absolute bottom-2 left-2">
-                    <StockBadge quantity={product.availableQuantity} />
+                    <StockBadge quantity={product.availableQuantity} minStock={product.minStock} />
                   </div>
                 </div>
 

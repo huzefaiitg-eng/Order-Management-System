@@ -47,8 +47,8 @@ export const STOCK_COLORS = {
 
 export const LOW_STOCK_THRESHOLD = 5;
 
-export function getStockStatus(quantity) {
+export function getStockStatus(quantity, minStock = LOW_STOCK_THRESHOLD) {
   if (quantity <= 0) return 'Out of Stock';
-  if (quantity < LOW_STOCK_THRESHOLD) return 'Low Stock';
+  if (quantity < minStock) return 'Low Stock';
   return 'In Stock';
 }

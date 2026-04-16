@@ -5,7 +5,6 @@ const { getAllOrders, getAllInventory } = require('../services/sheets');
 const DELAYED_THRESHOLD_DAYS = 3;
 const LOW_MARGIN_THRESHOLD = 0.1;
 const CHURN_DAYS_THRESHOLD = 60;
-const LOW_STOCK_THRESHOLD = 5;
 const HIGH_RETURN_RATE_THRESHOLD = 0.2;
 
 // GET /api/insights
@@ -98,8 +97,8 @@ router.get('/', async (req, res) => {
     }));
 
     const lowStockAlerts = enrichedInventory
-      .filter(p => p.instockQuantity > 0 && p.availableQuantity < LOW_STOCK_THRESHOLD)
-      .map(p => ({ articleId: p.articleId, productName: p.productName, category: p.category, instockQuantity: p.instockQuantity, availableQuantity: p.availableQuantity }));
+      .filter(p => p.instockQuantity > 0 && p.availableQuantity < (p.minStock || 5))
+      .map(p => ({ articleId: p.articleId, productName: p.productName, category: p.category, instockQuantity: p.instockQuantity, availableQuantity: p.availableQuantity, minStock: p.minStock || 5 }));
 
     const outOfStockProducts = enrichedInventory
       .filter(p => p.instockQuantity === 0)

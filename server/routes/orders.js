@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getAllOrders, updateOrderStatus, addOrder, getOrderStatus, addAuditEntry, getAuditHistory, getAllCustomers, getAllInventory } = require('../services/sheets');
+const { getAllOrders, updateOrderStatus, addOrder, getOrderStatus, addAuditEntry, getAuditHistory, getAllCustomers, getAllInventory, adjustStock, getOrderByRowIndex } = require('../services/sheets');
 
 const VALID_STATUSES = [
   'Pending', 'Confirmed', 'Packed', 'Shipped',
@@ -158,6 +158,36 @@ router.patch('/:rowIndex', async (req, res) => {
     const currentStatus = await getOrderStatus(sheetId, rowIndex);
     const result = await updateOrderStatus(sheetId, rowIndex, status);
     await addAuditEntry(sheetId, { orderRowIndex: rowIndex, previousStatus: currentStatus, newStatus: status });
+
+    // Stock side-effects when a Delivered transition happens in either direction
+    const enteringDelivered = status === 'Delivered' && currentStatus !== 'Delivered';
+    const exitingDelivered = currentStatus === 'Delivered' && status !== 'Delivered';
+    if (enteringDelivered || exitingDelivered) {
+      try {
+        const [order, inv] = await Promise.all([getOrderByRowIndex(sheetId, rowIndex), getAllInventory(sheetId)]);
+        if (order && order.productLines && order.productLines.length > 0) {
+          for (const line of order.productLines) {
+            if (!line.productName) continue;
+            const qty = parseInt(line.quantity) || 0;
+            if (qty <= 0) continue;
+            const product = inv.find(p => p.productName === line.productName);
+            if (!product) continue;
+            const delta = enteringDelivered ? -qty : +qty;
+            const reason = enteringDelivered
+              ? `Order ${order.orderNumber || `#${rowIndex}`} delivered (row ${rowIndex})`
+              : `Order ${order.orderNumber || `#${rowIndex}`} delivery reversed → ${status} (row ${rowIndex})`;
+            await adjustStock(sheetId, product.articleId, {
+              delta,
+              reason,
+              changeType: enteringDelivered ? 'delivered' : 'delivery-reversed',
+            });
+          }
+        }
+      } catch (err) {
+        // Log but don't fail the status update — user shouldn't lose their status change if audit logging breaks
+        console.error('Stock side-effect error on order status change:', err.message);
+      }
+    }
 
     res.json({ success: true, data: result });
   } catch (error) {
