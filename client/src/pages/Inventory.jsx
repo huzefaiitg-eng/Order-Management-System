@@ -317,30 +317,19 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* ─── Tab Bar ─── */}
-      <div className="flex border-b border-gray-200">
-        <button
-          onClick={() => setTab('insights')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'insights'
-              ? 'border-terracotta-600 text-terracotta-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Lightbulb size={16} />
-          Insights
-        </button>
-        <button
-          onClick={() => setTab('details')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'details'
-              ? 'border-terracotta-600 text-terracotta-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Package size={16} />
-          All Products
-        </button>
+      {/* ─── Tabs ─── */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+        {[
+          { key: 'insights', label: 'Insights', icon: Lightbulb },
+          { key: 'details', label: 'All Products', icon: Package },
+        ].map(tab => (
+          <button key={tab.key} onClick={() => setTab(tab.key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === tab.key ? 'bg-white text-terracotta-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}>
+            <tab.icon size={15} />{tab.label}
+          </button>
+        ))}
       </div>
 
       {/* ─── Insights Tab ─── */}
