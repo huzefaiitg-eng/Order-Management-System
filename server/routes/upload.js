@@ -23,9 +23,14 @@ router.post('/', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, error: 'No image file provided' });
 
+    // Scope uploads to a per-user subfolder using the JWT-decoded email
+    const sanitizedEmail = (req.user?.email || 'shared')
+      .toLowerCase()
+      .replace(/[@.]/g, '_');
+
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: 'oms-products', transformation: [{ width: 800, height: 800, crop: 'limit', quality: 'auto' }] },
+        { folder: `oms-products/${sanitizedEmail}`, transformation: [{ width: 800, height: 800, crop: 'limit', quality: 'auto' }] },
         (error, result) => {
           if (error) reject(error);
           else resolve(result);

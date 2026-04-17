@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee, Plus, X, Archive, SlidersHorizontal, ArrowUpDown, Lightbulb, ShieldAlert, TrendingUp, Clock, RotateCcw, Star } from 'lucide-react';
+import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee, Plus, X, Archive, SlidersHorizontal, ArrowUpDown, Lightbulb, TrendingUp, Clock, RotateCcw, Star } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
 import { useInventory } from '../hooks/useInventory';
 import { fetchInventorySummary, addProduct, archiveProduct } from '../services/api';
@@ -281,6 +281,21 @@ export default function Inventory() {
     return list;
   }, [products, sortField, sortDir, stockFilter]);
 
+  // Merge out-of-stock + low-stock into one unified list; tag top sellers
+  const stockAlerts = useMemo(() => {
+    if (!insightsData) return [];
+    const topSellerSet = new Set(
+      (insightsData.bestSellingProducts || []).map(p => p.productName)
+    );
+    const outOfStock = (insightsData.outOfStockProducts || []).map(p => ({
+      ...p, alertType: 'out', isTopSeller: topSellerSet.has(p.productName),
+    }));
+    const lowStock = (insightsData.lowStockAlerts || []).map(p => ({
+      ...p, alertType: 'low', isTopSeller: topSellerSet.has(p.productName),
+    }));
+    return [...outOfStock, ...lowStock];
+  }, [insightsData]);
+
   const visibleProducts = sorted.slice(0, visibleCount);
 
   useEffect(() => { setVisibleCount(BATCH_SIZE); }, [filters, sortField, sortDir, stockFilter]);
@@ -354,75 +369,46 @@ export default function Inventory() {
 
           {insightsData && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* 1. Out of Stock */}
-              <InsightSection icon={PackageX} title="Out of Stock" count={insightsData.outOfStockProducts?.length ?? 0} color="red">
-                {(insightsData.outOfStockProducts?.length ?? 0) === 0 ? (
-                  <p className="text-sm text-gray-500">All products are in stock</p>
-                ) : (
-                  <div className="space-y-3">
-                    {insightsData.outOfStockProducts.map((p, i) => (
-                      <div key={i} className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <Link to={`/inventory/${encodeURIComponent(p.articleId)}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate block">{p.productName}</Link>
-                          <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
+              {/* 1. Stock Alerts — unified Out of Stock + Low Stock, with Top Seller pill */}
+              <div className="lg:col-span-2">
+                <InsightSection icon={AlertTriangle} title="Stock Alerts" count={stockAlerts.length} color="red">
+                  {stockAlerts.length === 0 ? (
+                    <p className="text-sm text-gray-500">All products are well-stocked</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+                      {stockAlerts.map((p, i) => (
+                        <div key={i} className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Link to={`/inventory/${encodeURIComponent(p.articleId)}`}
+                                className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate">
+                                {p.productName}
+                              </Link>
+                              {p.isTopSeller && (
+                                <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap">
+                                  ⭐ Top Seller
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            {p.alertType === 'out'
+                              ? <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Out of Stock</span>
+                              : <>
+                                  <p className="text-xs font-semibold text-amber-700">{p.availableQuantity} left</p>
+                                  <p className="text-[10px] text-gray-400">min {p.minStock}</p>
+                                </>
+                            }
+                          </div>
                         </div>
-                        <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full shrink-0">Out of Stock</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </InsightSection>
+                      ))}
+                    </div>
+                  )}
+                </InsightSection>
+              </div>
 
-              {/* 2. Low Stock Alerts */}
-              <InsightSection icon={AlertTriangle} title="Low Stock Alerts" count={insightsData.lowStockAlerts?.length ?? 0} color="amber">
-                {(insightsData.lowStockAlerts?.length ?? 0) === 0 ? (
-                  <p className="text-sm text-gray-500">No low-stock products</p>
-                ) : (
-                  <div className="space-y-3">
-                    {insightsData.lowStockAlerts.map((p, i) => (
-                      <div key={i} className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <Link to={`/inventory/${encodeURIComponent(p.articleId)}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate block">{p.productName}</Link>
-                          <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-xs font-semibold text-amber-700">{p.availableQuantity} left</p>
-                          <p className="text-[10px] text-gray-400">min {p.minStock}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </InsightSection>
-
-              {/* 3. Top Sellers at Risk (NEW) */}
-              <InsightSection icon={ShieldAlert} title="Top Sellers at Risk" count={insightsData.topSellersAtRisk?.length ?? 0} color="red">
-                {(insightsData.topSellersAtRisk?.length ?? 0) === 0 ? (
-                  <p className="text-sm text-gray-500">All top sellers are well-stocked</p>
-                ) : (
-                  <div className="space-y-3">
-                    {insightsData.topSellersAtRisk.map((p, i) => (
-                      <div key={i} className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          {p.articleId
-                            ? <Link to={`/inventory/${encodeURIComponent(p.articleId)}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate block">{p.productName}</Link>
-                            : <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
-                          }
-                          <p className="text-xs text-gray-400">{p.orderCount} orders</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          {p.isOutOfStock
-                            ? <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Out of Stock</span>
-                            : <p className="text-xs font-semibold text-amber-700">{p.availableQuantity} left</p>
-                          }
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </InsightSection>
-
-              {/* 4. Max Stock Alerts (NEW) */}
+              {/* 2. Max Stock Alerts */}
               <InsightSection icon={TrendingUp} title="Max Stock Alerts" count={insightsData.maxStockAlerts?.length ?? 0} color="blue">
                 {(insightsData.maxStockAlerts?.length ?? 0) === 0 ? (
                   <p className="text-sm text-gray-500">No products exceeding max stock</p>
@@ -444,11 +430,13 @@ export default function Inventory() {
                 )}
               </InsightSection>
 
-              {/* 5. Slow Moving Inventory */}
+              {/* 3. Slow Moving Inventory */}
               <InsightSection icon={Clock} title="Slow Moving Inventory" count={insightsData.slowMovingInventory?.length ?? 0} color="blue">
                 {(insightsData.slowMovingInventory?.length ?? 0) === 0 ? (
                   <p className="text-sm text-gray-500">No slow-moving inventory</p>
                 ) : (
+                  <>
+                  <p className="text-xs text-gray-400 mb-3">Products with 10+ units in stock and fewer than 2 total orders</p>
                   <div className="space-y-3">
                     {insightsData.slowMovingInventory.map((p, i) => (
                       <div key={i} className="flex items-center justify-between gap-3">
@@ -463,10 +451,11 @@ export default function Inventory() {
                       </div>
                     ))}
                   </div>
+                  </>
                 )}
               </InsightSection>
 
-              {/* 6. High Return Products */}
+              {/* 4. High Return Products */}
               <InsightSection icon={RotateCcw} title="High Return Products" count={insightsData.highReturnProducts?.length ?? 0} color="orange">
                 {(insightsData.highReturnProducts?.length ?? 0) === 0 ? (
                   <p className="text-sm text-gray-500">No high-return products</p>
@@ -488,11 +477,13 @@ export default function Inventory() {
                 )}
               </InsightSection>
 
-              {/* 7. Best Selling Products */}
+              {/* 5. Best Selling Products */}
               <InsightSection icon={Star} title="Best Selling Products" count={insightsData.bestSellingProducts?.length ?? 0} color="green">
                 {(insightsData.bestSellingProducts?.length ?? 0) === 0 ? (
                   <p className="text-sm text-gray-500">No sales data yet</p>
                 ) : (
+                  <>
+                  <p className="text-xs text-gray-400 mb-3">Top 10 products by total orders placed</p>
                   <div className="space-y-3">
                     {insightsData.bestSellingProducts.map((p, i) => (
                       <div key={i} className="flex items-center gap-3">
@@ -513,6 +504,7 @@ export default function Inventory() {
                       </div>
                     ))}
                   </div>
+                  </>
                 )}
               </InsightSection>
             </div>

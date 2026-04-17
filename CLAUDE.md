@@ -119,25 +119,28 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
   - Default status: Pending
   - Logs initial audit entry on creation
 
-### 3. Insights & Actions Panel (Tabbed)
-**Order Insights:**
+### 3. Insights (embedded in each page — no standalone Insights page)
+
+Each of Orders, Customers, and Inventory has **two tabs**: **Insights** (default when navigating from Navbar) and the list/detail view. Dashboard links explicitly append `?tab=details` to land on the list view.
+
+**Order Insights tab** (4 sections):
 - COD payment follow-ups (delivered COD orders)
 - Delayed order alerts (stuck in status > 3 days)
 - Repeat customer patterns
 - Low-margin alerts (< 10% margin)
 
-**Customer Insights:**
+**Customer Insights tab** (3 KPI cards + 4 sections):
 - High-value customers (top 10 spenders)
 - Churn risk (no order in 60+ days)
 - Attention needed (customers with delayed orders)
 - High return rate customers (> 30% return rate)
 
-**Inventory Insights:**
-- Low stock alerts (available qty < 5)
-- Out of stock products
-- Best selling products (top 10 by order count)
-- Slow moving inventory (high stock, few orders)
-- High return products (> 20% return rate)
+**Inventory Insights tab** (4 KPI cards + 5 sections):
+- **Stock Alerts** (unified card) — out-of-stock products first, then low-stock (below minStock). Products that are also top-10 sellers get an amber ⭐ Top Seller pill inline. This replaces the former "Out of Stock", "Low Stock Alerts", and "Top Sellers at Risk" separate cards.
+- **Max Stock Alerts** — products exceeding their maxStock cap (shows current / max + excess)
+- **Slow Moving Inventory** — 10+ units in stock AND fewer than 2 total orders; sorted by stock descending
+- **High Return Products** — products with ≥ 2 orders and > 20% return rate
+- **Best Selling Products** — top 10 by order count; shows rank, orders, revenue
 
 ### 4. Order Detail View
 - Full details of a single order
@@ -148,13 +151,13 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 - Customer order history (other orders from the same customer)
 
 ### 5. Inventory Page
-- Summary cards: Total products (active only), inventory value, low stock count, out of stock count
-- Searchable, filterable table (by category, sub-category) — shows Active products only
-- Columns: Article ID, Product Name, Category, Sub Category, Cost, In Stock, Active Orders, Available (color-coded stock badge), Total Sold, Archive button
-- Click "View" to open Product Detail page
-- **Add Product** button — opens modal form to add a new product (auto-generates Article ID)
+Two tabs — **Insights** (default) and **All Products**:
+- **Insights tab**: 4 KPI summary cards (Total Products, Inventory Value, Low Stock, Out of Stock — last two clickable, link to filtered All Products view) + 5 insight sections (see §3)
+- **All Products tab**: searchable, filterable product card grid (by category, sub-category) — Active products only; sort dropdown (Name A–Z, Low/More stock first, Price, Most sold); lazy loading (25 per batch). If navigated from Dashboard with `?stockFilter=lowStock|outOfStock`, forces this tab and shows a filter badge.
+- Each product card shows: image, name, article ID, category, selling price, cost, available qty, active orders, total sold; Archive button on hover.
+- **Add Product** button — opens modal form (name, category, sub-category, cost, selling price, instock qty, min stock, max stock, description, images)
 - **Archived** button — navigates to Archived Inventory page
-- **Mobile responsive**: Filter flap (category, sub-category) beside search, mobile-only sort dropdown (Name A–Z, Low/More stock first, Most/Least expensive), lazy loading (25 per batch), minimal mobile card layout showing name + article ID + stock badge + category + selling price/stock/sold KPIs.
+- Product images uploaded via Cloudinary (`POST /api/upload`); stored per user in `oms-products/{sanitized-email}/`
 
 ### 6. Product Detail Page
 - Product header with name, description, article ID, category/sub-category badges, stock badge
@@ -210,8 +213,8 @@ src/
   components/       # Reusable UI components (StatusBadge, StockBadge, KpiCard, ProtectedRoute,
                     #   SearchableDropdown, TimePresetPicker, CardFilterModal, FilterableCard, BillModal, etc.)
   context/          # React contexts (AuthContext)
-  pages/            # Dashboard, Orders, OrderDetail, Inventory, ProductDetail, Customers, CustomerDetail, Insights, Login, Profile
-  hooks/            # Custom hooks (useOrders, useDashboard, useCustomers, useInventory, useInsights, useCardFilters)
+  pages/            # Dashboard, Orders, OrderDetail, Inventory, ProductDetail, Customers, CustomerDetail, Login, Profile
+  hooks/            # Custom hooks (useOrders, useDashboard, useCustomers, useInventory, useOrderInsights, useCustomerInsights, useInventoryInsights, useCardFilters)
   services/         # API client functions (includes auth: login, logout, fetchProfile, updateProfile)
   utils/            # Formatters, helpers, dashboardAggregations (client-side dashboard filtering/aggregation)
   App.jsx
@@ -238,7 +241,8 @@ server/
 - `GET /api/orders/:rowIndex/audit` — Fetch audit history (status changes) for an order
 - `PATCH /api/orders/:rowIndex` — Update order status (logs audit entry with previous/new status)
 - `GET /api/dashboard` — Returns raw orders (trimmed) + customer/inventory summary KPIs. No query params; per-card filtering is client-side.
-- `GET /api/insights` — All insights (order, customer, inventory)
+- `GET /api/insights?scope=orders|customers|inventory` — Scoped insights; returns only the relevant subset to reduce payload
+- `POST /api/upload` — Upload image to Cloudinary; stores in `oms-products/{sanitized-email}/` per user (req.user.email decoded from JWT)
 - `GET /api/customers` — Customer list (supports `?search=`, `?status=Active|Archived`, default Active)
 - `POST /api/customers` — Add a new customer (auto-generates Customer ID)
 - `PATCH /api/customers/:phone/archive` — Archive a customer
