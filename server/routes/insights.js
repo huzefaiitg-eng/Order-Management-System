@@ -67,6 +67,18 @@ router.get('/', async (req, res) => {
       });
 
       enrichedInventory.forEach(p => { productLookup[p.productName] = p; });
+
+      // Orders placed in the last 15 days per product (urgency signal for restocking)
+      const cutoff15d = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
+      var orders15dByProduct = {};
+      orders.forEach(o => {
+        if (parseDate(o.orderDate) >= cutoff15d) {
+          (o.productLines || []).forEach(line => {
+            if (!line.productName) return;
+            orders15dByProduct[line.productName] = (orders15dByProduct[line.productName] || 0) + 1;
+          });
+        }
+      });
     }
 
     const result = {};
@@ -138,11 +150,11 @@ router.get('/', async (req, res) => {
     if (scope === 'all' || scope === 'inventory') {
       result.lowStockAlerts = enrichedInventory
         .filter(p => p.instockQuantity > 0 && p.availableQuantity < (p.minStock || 5))
-        .map(p => ({ articleId: p.articleId, productName: p.productName, category: p.category, instockQuantity: p.instockQuantity, availableQuantity: p.availableQuantity, minStock: p.minStock || 5 }));
+        .map(p => ({ articleId: p.articleId, productName: p.productName, category: p.category, instockQuantity: p.instockQuantity, availableQuantity: p.availableQuantity, minStock: p.minStock || 5, ordersLast15Days: orders15dByProduct[p.productName] || 0 }));
 
       result.outOfStockProducts = enrichedInventory
         .filter(p => p.instockQuantity === 0)
-        .map(p => ({ articleId: p.articleId, productName: p.productName, category: p.category, subCategory: p.subCategory }));
+        .map(p => ({ articleId: p.articleId, productName: p.productName, category: p.category, subCategory: p.subCategory, ordersLast15Days: orders15dByProduct[p.productName] || 0 }));
 
       const bestSellingProducts = Object.entries(productOrderStats)
         .map(([name, stats]) => ({

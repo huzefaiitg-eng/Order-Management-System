@@ -375,13 +375,13 @@ export default function Inventory() {
                   {stockAlerts.length === 0 ? (
                     <p className="text-sm text-gray-500">All products are well-stocked</p>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+                    <div className="divide-y divide-gray-50">
                       {stockAlerts.map((p, i) => (
-                        <div key={i} className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
+                        <div key={i} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 min-w-0">
                               <Link to={`/inventory/${encodeURIComponent(p.articleId)}`}
-                                className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate">
+                                className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate min-w-0">
                                 {p.productName}
                               </Link>
                               {p.isTopSeller && (
@@ -390,9 +390,14 @@ export default function Inventory() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
+                            <div className="flex items-center gap-2.5 mt-0.5">
+                              <p className="text-xs text-gray-400 font-mono shrink-0">{p.articleId} · {p.category}</p>
+                              {p.ordersLast15Days > 0 && (
+                                <span className="text-[11px] font-medium text-blue-600 shrink-0">{p.ordersLast15Days} orders / 15d</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-right shrink-0">
+                          <div className="text-right shrink-0 ml-2">
                             {p.alertType === 'out'
                               ? <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Out of Stock</span>
                               : <>
