@@ -340,8 +340,12 @@ export default function Inventory() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <KpiCard title="Total Products" value={summary.totalProducts} icon={Package} color="terracotta" />
               <KpiCard title="Inventory Value" value={formatCurrency(summary.totalInventoryValue)} icon={IndianRupee} color="green" />
-              <KpiCard title="Low Stock" value={summary.lowStockCount} icon={AlertTriangle} color="amber" />
-              <KpiCard title="Out of Stock" value={summary.outOfStockCount} icon={PackageX} color="red" />
+              <Link to="/inventory?tab=details&stockFilter=lowStock" className="block h-full">
+              <KpiCard title="Low Stock" value={summary.lowStockCount} icon={AlertTriangle} color="amber" clickable />
+            </Link>
+            <Link to="/inventory?tab=details&stockFilter=outOfStock" className="block h-full">
+              <KpiCard title="Out of Stock" value={summary.outOfStockCount} icon={PackageX} color="red" clickable />
+            </Link>
             </div>
           )}
 
@@ -359,7 +363,7 @@ export default function Inventory() {
                     {insightsData.outOfStockProducts.map((p, i) => (
                       <div key={i} className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          <Link to={`/inventory/${encodeURIComponent(p.articleId)}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate block">{p.productName}</Link>
                           <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
                         </div>
                         <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full shrink-0">Out of Stock</span>
@@ -378,7 +382,7 @@ export default function Inventory() {
                     {insightsData.lowStockAlerts.map((p, i) => (
                       <div key={i} className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          <Link to={`/inventory/${encodeURIComponent(p.articleId)}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate block">{p.productName}</Link>
                           <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
                         </div>
                         <div className="text-right shrink-0">
@@ -400,8 +404,11 @@ export default function Inventory() {
                     {insightsData.topSellersAtRisk.map((p, i) => (
                       <div key={i} className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
-                          <p className="text-xs text-gray-400">{p.totalOrders} orders · {p.category}</p>
+                          {p.articleId
+                            ? <Link to={`/inventory/${encodeURIComponent(p.articleId)}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate block">{p.productName}</Link>
+                            : <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          }
+                          <p className="text-xs text-gray-400">{p.orderCount} orders</p>
                         </div>
                         <div className="text-right shrink-0">
                           {p.isOutOfStock
@@ -424,7 +431,7 @@ export default function Inventory() {
                     {insightsData.maxStockAlerts.map((p, i) => (
                       <div key={i} className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          <Link to={`/inventory/${encodeURIComponent(p.articleId)}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate block">{p.productName}</Link>
                           <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
                         </div>
                         <div className="text-right shrink-0">
@@ -446,7 +453,7 @@ export default function Inventory() {
                     {insightsData.slowMovingInventory.map((p, i) => (
                       <div key={i} className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          <Link to={`/inventory/${encodeURIComponent(p.articleId)}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate block">{p.productName}</Link>
                           <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
                         </div>
                         <div className="text-right shrink-0">
@@ -468,10 +475,13 @@ export default function Inventory() {
                     {insightsData.highReturnProducts.map((p, i) => (
                       <div key={i} className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          {p.articleId
+                            ? <Link to={`/inventory/${encodeURIComponent(p.articleId)}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate block">{p.productName}</Link>
+                            : <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          }
                           <p className="text-xs text-gray-400">{p.returnedOrders} of {p.totalOrders} orders returned</p>
                         </div>
-                        <span className="text-xs font-semibold text-orange-700 shrink-0">{p.returnRate}% return</span>
+                        <span className="text-xs font-semibold text-orange-700 shrink-0">{Math.round(p.returnRate * 100)}% return</span>
                       </div>
                     ))}
                   </div>
@@ -489,11 +499,14 @@ export default function Inventory() {
                         <span className="text-xs font-bold text-gray-400 w-5 shrink-0">#{i + 1}</span>
                         <div className="flex items-center justify-between gap-3 flex-1 min-w-0">
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                            {p.articleId
+                              ? <Link to={`/inventory/${encodeURIComponent(p.articleId)}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate block">{p.productName}</Link>
+                              : <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                            }
                             <p className="text-xs text-gray-400">{p.category}</p>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="text-xs font-semibold text-green-700">{p.totalOrders} orders</p>
+                            <p className="text-xs font-semibold text-green-700">{p.orderCount} orders</p>
                             <p className="text-[10px] text-gray-400">{formatCurrency(p.totalRevenue)}</p>
                           </div>
                         </div>

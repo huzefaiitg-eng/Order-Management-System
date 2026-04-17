@@ -49,7 +49,7 @@ router.get('/', async (req, res) => {
         });
       });
 
-      enrichedInventory = inventory.map(p => ({
+      enrichedInventory = inventory.filter(p => p.status === 'Active' || !p.status).map(p => ({
         ...p,
         quantityInActiveOrders: activeQtyByProduct[p.productName] || 0,
         availableQuantity: p.instockQuantity,
