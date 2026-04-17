@@ -8,7 +8,6 @@ import Profile from './pages/Profile';
 import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
-import Insights from './pages/Insights';
 import Customers from './pages/Customers';
 import CustomerDetail from './pages/CustomerDetail';
 import ArchivedCustomers from './pages/ArchivedCustomers';
@@ -77,7 +76,6 @@ export default function App() {
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/customers/archived" element={<ArchivedCustomers />} />
                 <Route path="/customers/:phone" element={<CustomerDetail />} />
-                <Route path="/insights" element={<Insights />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>

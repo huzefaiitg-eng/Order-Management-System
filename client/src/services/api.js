@@ -102,8 +102,8 @@ export function fetchDashboard() {
   return request('/dashboard');
 }
 
-export function fetchInsights() {
-  return request('/insights');
+export function fetchInsights(scope = 'all') {
+  return request(`/insights${scope !== 'all' ? `?scope=${scope}` : ''}`);
 }
 
 // Customers

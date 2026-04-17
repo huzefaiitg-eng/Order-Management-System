@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Search, RefreshCw, Eye, Plus, X, SlidersHorizontal, MoreVertical, CheckCircle, FileText, Trash2 } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Search, RefreshCw, Eye, Plus, X, SlidersHorizontal, MoreVertical, CheckCircle, FileText, Trash2, Lightbulb, ShoppingBag, AlertTriangle, Clock, Users, TrendingDown } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
+import { useOrderInsights } from '../hooks/useOrderInsights';
 import StatusSelect from '../components/StatusSelect';
 import StatusBadge from '../components/StatusBadge';
+import InsightSection from '../components/InsightSection';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 import { formatCurrency, ORDER_SOURCES, ORDER_STATUSES, PAYMENT_MODES } from '../utils/formatters';
@@ -332,6 +334,12 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
 /* ─── Main Orders Page ─── */
 export default function Orders() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'insights';
+
+  // Insights data — always fetched (it's the default tab)
+  const { data: insightsData, loading: insightsLoading, error: insightsError } = useOrderInsights();
+
   const [filters, setFilters] = useState({});
   const [search, setSearch] = useState('');
   const { orders, loading, error, refresh, updateStatus } = useOrders(filters);
@@ -466,6 +474,118 @@ export default function Orders() {
         </button>
       </div>
 
+      {/* ─── Tabs ─── */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+        {[
+          { key: 'insights', label: 'Insights', icon: Lightbulb },
+          { key: 'details', label: 'All Orders', icon: ShoppingBag },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setSearchParams({ tab: tab.key })}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'bg-white text-terracotta-700 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <tab.icon size={15} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ─── Insights Tab ─── */}
+      {activeTab === 'insights' && (
+        <div>
+          {insightsLoading && <Loader />}
+          {insightsError && <ErrorMessage message={insightsError} />}
+          {insightsData && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <InsightSection icon={AlertTriangle} title="COD Payment Follow-ups" count={insightsData.codFollowUps?.length || 0} color="amber">
+                {!insightsData.codFollowUps?.length ? (
+                  <p className="text-sm text-gray-500">No COD follow-ups needed</p>
+                ) : (
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {insightsData.codFollowUps.map(o => (
+                      <Link key={o.rowIndex} to={`/orders/${o.rowIndex}`} className="flex items-center justify-between p-3 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{o.customerName}</p>
+                          <p className="text-xs text-gray-500">{o.productOrdered} · {o.orderDate}</p>
+                        </div>
+                        <p className="text-sm font-bold text-gray-900">{formatCurrency(o.pricePaid)}</p>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </InsightSection>
+
+              <InsightSection icon={Clock} title="Delayed Orders" count={insightsData.delayedOrders?.length || 0} color="red">
+                {!insightsData.delayedOrders?.length ? (
+                  <p className="text-sm text-gray-500">No delayed orders</p>
+                ) : (
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {insightsData.delayedOrders.map(o => (
+                      <Link key={o.rowIndex} to={`/orders/${o.rowIndex}`} className="flex items-center justify-between p-3 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{o.customerName}</p>
+                          <p className="text-xs text-gray-500">{o.productOrdered} · {o.orderDate}</p>
+                        </div>
+                        <StatusBadge status={o.orderStatus} />
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </InsightSection>
+
+              <InsightSection icon={Users} title="Repeat Customers" count={insightsData.repeatCustomers?.length || 0} color="blue">
+                {!insightsData.repeatCustomers?.length ? (
+                  <p className="text-sm text-gray-500">No repeat customers yet</p>
+                ) : (
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {insightsData.repeatCustomers.map((c, i) => (
+                      <Link key={i} to={`/customers/${encodeURIComponent(c.customerPhone)}`} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{c.customerName}</p>
+                          <p className="text-xs text-gray-500">{c.customerPhone}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-gray-900">{c.orderCount} orders</p>
+                          <p className="text-xs text-gray-500">{formatCurrency(c.totalSpent)}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </InsightSection>
+
+              <InsightSection icon={TrendingDown} title="Low Margin Orders" count={insightsData.lowMarginOrders?.length || 0} color="orange">
+                {!insightsData.lowMarginOrders?.length ? (
+                  <p className="text-sm text-gray-500">No low-margin orders</p>
+                ) : (
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {insightsData.lowMarginOrders.map(o => (
+                      <Link key={o.rowIndex} to={`/orders/${o.rowIndex}`} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{o.productOrdered}</p>
+                          <p className="text-xs text-gray-500">{o.customerName} · {o.orderDate}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-red-600">{formatCurrency(o.profit)}</p>
+                          <p className="text-xs text-gray-500">Cost: {formatCurrency(o.productCost)}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </InsightSection>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── All Orders Tab ─── */}
+      {activeTab === 'details' && <>
       {/* ─── Search + Filter Button ─── */}
       <div className="flex items-center gap-3">
         <form onSubmit={handleSearch} className="relative flex-1 md:flex-none md:w-64">
@@ -683,6 +803,8 @@ export default function Orders() {
           </div>
         </>
       )}
+
+      </>} {/* end All Orders tab */}
 
       {showAddModal && <AddOrderModal onClose={() => setShowAddModal(false)} onAdded={refresh} onGenerateBill={setBillOrder} />}
       {billOrder && <BillModal order={billOrder} onClose={() => setBillOrder(null)} />}

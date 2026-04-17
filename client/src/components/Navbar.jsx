@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Lightbulb, Users, Package, User, LogOut, Menu, X, Settings } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Users, Package, User, LogOut, Menu, X, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
 
@@ -9,7 +9,6 @@ const navItems = [
   { path: '/orders', label: 'Orders', icon: ShoppingBag },
   { path: '/inventory', label: 'Inventory', icon: Package },
   { path: '/customers', label: 'Customers', icon: Users },
-  { path: '/insights', label: 'Insights', icon: Lightbulb },
 ];
 
 function getInitials(name) {

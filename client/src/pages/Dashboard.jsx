@@ -182,7 +182,7 @@ export default function Dashboard() {
         onOpenFilters={kpiFilters.openModal}
       >
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-1">
-          <StatItem label="Total Orders" value={kpis.totalOrders} to="/orders" />
+          <StatItem label="Total Orders" value={kpis.totalOrders} to="/orders?tab=details" />
           <StatItem label="Total Revenue" value={formatCurrency(kpis.totalRevenue)} color="green" />
           <StatItem label="Total Profit" value={formatCurrency(kpis.totalProfit)} color="green" />
           <StatItem label="Avg Order Value" value={formatCurrency(kpis.avgOrderValue)} />
@@ -351,34 +351,34 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <SimpleGroupCard title="Customers" icon={Users} iconBg="bg-blue-50 text-blue-600">
           <div className="grid grid-cols-3 gap-1">
-            <StatItem label="Total" value={customerKpis.totalCustomers ?? '—'} to="/customers" />
+            <StatItem label="Total" value={customerKpis.totalCustomers ?? '—'} to="/customers?tab=details" />
             <StatItem
               label="Active"
               value={customerKpis.activeCustomers ?? '—'}
-              to="/customers?hasActiveOrders=true"
+              to="/customers?tab=details&hasActiveOrders=true"
               color="green"
             />
             <StatItem
               label="New (7 days)"
               value={customerKpis.newCustomers7d ?? '—'}
-              to="/customers"
+              to="/customers?tab=details"
             />
           </div>
         </SimpleGroupCard>
 
         <SimpleGroupCard title="Inventory" icon={Package} iconBg="bg-amber-50 text-amber-600">
           <div className="grid grid-cols-3 gap-1">
-            <StatItem label="Total" value={inventoryKpis.totalInventory ?? '—'} to="/inventory" />
+            <StatItem label="Total" value={inventoryKpis.totalInventory ?? '—'} to="/inventory?tab=details" />
             <StatItem
               label="Low Stock"
               value={inventoryKpis.lowStockCount ?? '—'}
-              to="/inventory?stockFilter=lowStock"
+              to="/inventory?tab=details&stockFilter=lowStock"
               color="amber"
             />
             <StatItem
               label="Out of Stock"
               value={inventoryKpis.outOfStockCount ?? '—'}
-              to="/inventory?stockFilter=outOfStock"
+              to="/inventory?tab=details&stockFilter=outOfStock"
               color="red"
             />
           </div>

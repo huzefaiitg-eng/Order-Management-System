@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee, Plus, X, Archive, SlidersHorizontal, ArrowUpDown } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee, Plus, X, Archive, SlidersHorizontal, ArrowUpDown, Lightbulb, ShieldAlert, TrendingUp, Clock, RotateCcw, Star } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
 import { useInventory } from '../hooks/useInventory';
 import { fetchInventorySummary, addProduct, archiveProduct } from '../services/api';
@@ -11,6 +11,8 @@ import ProductImage from '../components/ProductImage';
 import KpiCard from '../components/KpiCard';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
+import { useInventoryInsights } from '../hooks/useInventoryInsights';
+import InsightSection from '../components/InsightSection';
 
 const BATCH_SIZE = 25;
 
@@ -143,9 +145,20 @@ function AddProductModal({ onClose, onAdded, categories, categorySubCategories }
 }
 
 export default function Inventory() {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const stockFilter = searchParams.get('stockFilter'); // 'lowStock' | 'outOfStock' | null
+  // If a stockFilter is present (from Dashboard link), force details tab
+  const activeTab = stockFilter ? 'details' : (searchParams.get('tab') || 'insights');
+
+  const setTab = (tab) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tab);
+    if (tab !== 'details') next.delete('stockFilter');
+    setSearchParams(next);
+  };
+
+  // Inventory insights (always fetched — default tab)
+  const { data: insightsData, loading: insightsLoading, error: insightsError } = useInventoryInsights();
 
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
@@ -216,7 +229,7 @@ export default function Inventory() {
 
   const removeChip = (type) => {
     let nc = appliedCategory, ns = appliedSubCategory;
-    if (type === 'category') { nc = ''; ns = ''; } // clearing category clears sub too
+    if (type === 'category') { nc = ''; ns = ''; }
     if (type === 'subCategory') ns = '';
     setAppliedCategory(nc);
     setAppliedSubCategory(ns);
@@ -270,10 +283,8 @@ export default function Inventory() {
 
   const visibleProducts = sorted.slice(0, visibleCount);
 
-  // Reset visible count when filters/sort change
   useEffect(() => { setVisibleCount(BATCH_SIZE); }, [filters, sortField, sortDir, stockFilter]);
 
-  // IntersectionObserver for lazy loading
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
@@ -306,155 +317,356 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* Stock filter badge */}
-      {stockFilter && (
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center gap-1.5 text-xs rounded-full px-3 py-1 font-medium border ${
-            stockFilter === 'outOfStock'
-              ? 'bg-red-50 border-red-200 text-red-700'
-              : 'bg-amber-50 border-amber-200 text-amber-700'
-          }`}>
-            {stockFilter === 'outOfStock' ? <PackageX size={12} /> : <AlertTriangle size={12} />}
-            Showing: {stockFilter === 'outOfStock' ? 'Out of Stock' : 'Low Stock'} only
-            <button
-              onClick={() => navigate('/inventory')}
-              className="ml-1 hover:opacity-70"
-              aria-label="Clear filter"
-            >
-              <X size={12} />
-            </button>
-          </span>
-        </div>
-      )}
-
-      {/* KPI Cards */}
-      {summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <KpiCard title="Total Products" value={summary.totalProducts} icon={Package} color="terracotta" />
-          <KpiCard title="Inventory Value" value={formatCurrency(summary.totalInventoryValue)} icon={IndianRupee} color="green" />
-          <KpiCard title="Low Stock" value={summary.lowStockCount} icon={AlertTriangle} color="amber" />
-          <KpiCard title="Out of Stock" value={summary.outOfStockCount} icon={PackageX} color="red" />
-        </div>
-      )}
-
-      {/* ─── Search + Filter + Sort row ─── */}
-      <div className="flex items-center gap-3">
-        <form onSubmit={handleSearch} className="relative flex-1 md:flex-none md:w-64">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500"
-          />
-        </form>
-        <button onClick={openFilterFlap}
-          className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shrink-0">
-          <SlidersHorizontal size={16} />
-          <span className="hidden md:inline">Filters</span>
-          {activeFilterCount > 0 && (
-            <span className="bg-terracotta-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>
-          )}
+      {/* ─── Tab Bar ─── */}
+      <div className="flex border-b border-gray-200">
+        <button
+          onClick={() => setTab('insights')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'insights'
+              ? 'border-terracotta-600 text-terracotta-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Lightbulb size={16} />
+          Insights
         </button>
-        {/* Sort dropdown */}
-        <div className="relative" ref={sortMenuRef}>
-          <button onClick={() => setSortOpen(o => !o)}
-            className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shrink-0">
-            <ArrowUpDown size={16} />
-            <span className="hidden sm:inline">Sort</span>
-          </button>
-          {sortOpen && (
-            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 w-52 py-1">
-              {SORT_OPTIONS.map(opt => (
-                <button key={opt.key} onClick={() => handleSortSelect(opt.key)}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${activeSort === opt.key ? 'text-terracotta-600 font-medium' : 'text-gray-700'}`}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <button
+          onClick={() => setTab('details')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'details'
+              ? 'border-terracotta-600 text-terracotta-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Package size={16} />
+          All Products
+        </button>
       </div>
 
-      {/* ─── Filter chips ─── */}
-      {(appliedCategory || appliedSubCategory) && (
-        <div className="flex flex-wrap gap-2">
-          {appliedCategory && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-terracotta-50 text-terracotta-700 text-xs rounded-full font-medium">
-              {appliedCategory} <button onClick={() => removeChip('category')} className="hover:text-terracotta-900"><X size={12} /></button>
-            </span>
+      {/* ─── Insights Tab ─── */}
+      {activeTab === 'insights' && (
+        <>
+          {/* KPI Cards */}
+          {summary && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <KpiCard title="Total Products" value={summary.totalProducts} icon={Package} color="terracotta" />
+              <KpiCard title="Inventory Value" value={formatCurrency(summary.totalInventoryValue)} icon={IndianRupee} color="green" />
+              <KpiCard title="Low Stock" value={summary.lowStockCount} icon={AlertTriangle} color="amber" />
+              <KpiCard title="Out of Stock" value={summary.outOfStockCount} icon={PackageX} color="red" />
+            </div>
           )}
-          {appliedSubCategory && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">
-              {appliedSubCategory} <button onClick={() => removeChip('subCategory')} className="hover:text-blue-900"><X size={12} /></button>
-            </span>
+
+          {insightsLoading && <Loader />}
+          {insightsError && <ErrorMessage message={insightsError} />}
+
+          {insightsData && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 1. Out of Stock */}
+              <InsightSection icon={PackageX} title="Out of Stock" count={insightsData.outOfStockProducts?.length ?? 0} color="red">
+                {(insightsData.outOfStockProducts?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-gray-500">All products are in stock</p>
+                ) : (
+                  <div className="space-y-3">
+                    {insightsData.outOfStockProducts.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
+                        </div>
+                        <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full shrink-0">Out of Stock</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InsightSection>
+
+              {/* 2. Low Stock Alerts */}
+              <InsightSection icon={AlertTriangle} title="Low Stock Alerts" count={insightsData.lowStockAlerts?.length ?? 0} color="amber">
+                {(insightsData.lowStockAlerts?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-gray-500">No low-stock products</p>
+                ) : (
+                  <div className="space-y-3">
+                    {insightsData.lowStockAlerts.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-semibold text-amber-700">{p.availableQuantity} left</p>
+                          <p className="text-[10px] text-gray-400">min {p.minStock}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InsightSection>
+
+              {/* 3. Top Sellers at Risk (NEW) */}
+              <InsightSection icon={ShieldAlert} title="Top Sellers at Risk" count={insightsData.topSellersAtRisk?.length ?? 0} color="red">
+                {(insightsData.topSellersAtRisk?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-gray-500">All top sellers are well-stocked</p>
+                ) : (
+                  <div className="space-y-3">
+                    {insightsData.topSellersAtRisk.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          <p className="text-xs text-gray-400">{p.totalOrders} orders · {p.category}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          {p.isOutOfStock
+                            ? <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Out of Stock</span>
+                            : <p className="text-xs font-semibold text-amber-700">{p.availableQuantity} left</p>
+                          }
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InsightSection>
+
+              {/* 4. Max Stock Alerts (NEW) */}
+              <InsightSection icon={TrendingUp} title="Max Stock Alerts" count={insightsData.maxStockAlerts?.length ?? 0} color="blue">
+                {(insightsData.maxStockAlerts?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-gray-500">No products exceeding max stock</p>
+                ) : (
+                  <div className="space-y-3">
+                    {insightsData.maxStockAlerts.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-semibold text-blue-700">{p.instockQuantity} / {p.maxStock}</p>
+                          <p className="text-[10px] text-gray-400">+{p.excess} excess</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InsightSection>
+
+              {/* 5. Slow Moving Inventory */}
+              <InsightSection icon={Clock} title="Slow Moving Inventory" count={insightsData.slowMovingInventory?.length ?? 0} color="blue">
+                {(insightsData.slowMovingInventory?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-gray-500">No slow-moving inventory</p>
+                ) : (
+                  <div className="space-y-3">
+                    {insightsData.slowMovingInventory.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          <p className="text-xs text-gray-400 font-mono">{p.articleId} · {p.category}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-semibold text-gray-700">{p.instockQuantity} in stock</p>
+                          <p className="text-[10px] text-gray-400">{p.totalOrders} orders</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InsightSection>
+
+              {/* 6. High Return Products */}
+              <InsightSection icon={RotateCcw} title="High Return Products" count={insightsData.highReturnProducts?.length ?? 0} color="orange">
+                {(insightsData.highReturnProducts?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-gray-500">No high-return products</p>
+                ) : (
+                  <div className="space-y-3">
+                    {insightsData.highReturnProducts.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                          <p className="text-xs text-gray-400">{p.returnedOrders} of {p.totalOrders} orders returned</p>
+                        </div>
+                        <span className="text-xs font-semibold text-orange-700 shrink-0">{p.returnRate}% return</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InsightSection>
+
+              {/* 7. Best Selling Products */}
+              <InsightSection icon={Star} title="Best Selling Products" count={insightsData.bestSellingProducts?.length ?? 0} color="green">
+                {(insightsData.bestSellingProducts?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-gray-500">No sales data yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {insightsData.bestSellingProducts.map((p, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-gray-400 w-5 shrink-0">#{i + 1}</span>
+                        <div className="flex items-center justify-between gap-3 flex-1 min-w-0">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{p.productName}</p>
+                            <p className="text-xs text-gray-400">{p.category}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs font-semibold text-green-700">{p.totalOrders} orders</p>
+                            <p className="text-[10px] text-gray-400">{formatCurrency(p.totalRevenue)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </InsightSection>
+            </div>
           )}
-        </div>
+        </>
       )}
 
-      {loading && <Loader />}
-      {error && <ErrorMessage message={error} />}
-
-      {!loading && !error && (
+      {/* ─── Details Tab ─── */}
+      {activeTab === 'details' && (
         <>
-          {/* ─── Product Cards Grid ─── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {visibleProducts.map((product) => (
-              <Link
-                key={product.articleId}
-                to={`/inventory/${encodeURIComponent(product.articleId)}`}
-                className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-terracotta-200 transition-all"
-              >
-                {/* Image area */}
-                <div className="relative">
-                  <ProductImage productImages={product.productImages} productName={product.productName} variant="card" />
-                  <button
-                    onClick={(e) => handleArchive(e, product)}
-                    disabled={archiving === product.articleId}
-                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/80 backdrop-blur-sm text-gray-500 hover:text-amber-600 hover:bg-white transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-50"
-                    title="Archive product"
-                  >
-                    <Archive size={14} />
-                  </button>
-                  <div className="absolute bottom-2 left-2">
-                    <StockBadge quantity={product.availableQuantity} minStock={product.minStock} />
-                  </div>
-                </div>
-
-                {/* Card body */}
-                <div className="p-3 sm:p-4">
-                  <h3 className="font-semibold text-gray-900 text-sm truncate">{product.productName}</h3>
-                  <p className="text-[11px] text-gray-400 font-mono mt-0.5">{product.articleId}</p>
-
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="inline-flex px-2 py-0.5 rounded bg-terracotta-50 text-terracotta-700 text-[11px] font-medium">{product.category}</span>
-                    <span className="text-[11px] text-gray-500 truncate">{product.subCategory}</span>
-                  </div>
-
-                  <p className="text-lg font-bold text-gray-900 mt-2">{formatCurrency(product.sellingPrice)}</p>
-                  <p className="text-[11px] text-gray-400">Cost {formatCurrency(product.productCost)}</p>
-
-                  <div className="flex items-center justify-between text-[11px] pt-3 mt-3 border-t border-gray-100">
-                    <span className="text-gray-500" title={`In Stock ${product.instockQuantity} − Active Units ${product.quantityInActiveOrders}`}>Available <span className="font-semibold text-gray-900">{product.availableQuantity}</span></span>
-                    <span className="text-gray-500" title={`${product.quantityInActiveOrders} unit(s) committed`}>Active <span className="font-semibold text-gray-900">{product.activeOrderCount || 0}</span></span>
-                    <span className="text-gray-500">Sold <span className="font-semibold text-gray-900">{product.totalOrders}</span></span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-            {visibleProducts.length === 0 && (
-              <div className="col-span-full text-center py-8 text-gray-500 text-sm">No products found</div>
-            )}
-          </div>
-
-          {/* ─── Lazy load sentinel + count ─── */}
-          {visibleCount < sorted.length && (
-            <div ref={sentinelRef} className="py-4 text-center text-sm text-gray-400">Loading more...</div>
+          {/* Stock filter badge */}
+          {stockFilter && (
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 text-xs rounded-full px-3 py-1 font-medium border ${
+                stockFilter === 'outOfStock'
+                  ? 'bg-red-50 border-red-200 text-red-700'
+                  : 'bg-amber-50 border-amber-200 text-amber-700'
+              }`}>
+                {stockFilter === 'outOfStock' ? <PackageX size={12} /> : <AlertTriangle size={12} />}
+                Showing: {stockFilter === 'outOfStock' ? 'Out of Stock' : 'Low Stock'} only
+                <button
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.delete('stockFilter');
+                    next.set('tab', 'details');
+                    setSearchParams(next);
+                  }}
+                  className="ml-1 hover:opacity-70"
+                  aria-label="Clear filter"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            </div>
           )}
-          <div className="text-center text-sm text-gray-500 py-1">
-            Showing {visibleProducts.length} of {sorted.length} product{sorted.length !== 1 ? 's' : ''}
+
+          {/* ─── Search + Filter + Sort row ─── */}
+          <div className="flex items-center gap-3">
+            <form onSubmit={handleSearch} className="relative flex-1 md:flex-none md:w-64">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500"
+              />
+            </form>
+            <button onClick={openFilterFlap}
+              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shrink-0">
+              <SlidersHorizontal size={16} />
+              <span className="hidden md:inline">Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="bg-terracotta-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>
+              )}
+            </button>
+            {/* Sort dropdown */}
+            <div className="relative" ref={sortMenuRef}>
+              <button onClick={() => setSortOpen(o => !o)}
+                className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shrink-0">
+                <ArrowUpDown size={16} />
+                <span className="hidden sm:inline">Sort</span>
+              </button>
+              {sortOpen && (
+                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 w-52 py-1">
+                  {SORT_OPTIONS.map(opt => (
+                    <button key={opt.key} onClick={() => handleSortSelect(opt.key)}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${activeSort === opt.key ? 'text-terracotta-600 font-medium' : 'text-gray-700'}`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* ─── Filter chips ─── */}
+          {(appliedCategory || appliedSubCategory) && (
+            <div className="flex flex-wrap gap-2">
+              {appliedCategory && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-terracotta-50 text-terracotta-700 text-xs rounded-full font-medium">
+                  {appliedCategory} <button onClick={() => removeChip('category')} className="hover:text-terracotta-900"><X size={12} /></button>
+                </span>
+              )}
+              {appliedSubCategory && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">
+                  {appliedSubCategory} <button onClick={() => removeChip('subCategory')} className="hover:text-blue-900"><X size={12} /></button>
+                </span>
+              )}
+            </div>
+          )}
+
+          {loading && <Loader />}
+          {error && <ErrorMessage message={error} />}
+
+          {!loading && !error && (
+            <>
+              {/* ─── Product Cards Grid ─── */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {visibleProducts.map((product) => (
+                  <Link
+                    key={product.articleId}
+                    to={`/inventory/${encodeURIComponent(product.articleId)}`}
+                    className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-terracotta-200 transition-all"
+                  >
+                    {/* Image area */}
+                    <div className="relative">
+                      <ProductImage productImages={product.productImages} productName={product.productName} variant="card" />
+                      <button
+                        onClick={(e) => handleArchive(e, product)}
+                        disabled={archiving === product.articleId}
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/80 backdrop-blur-sm text-gray-500 hover:text-amber-600 hover:bg-white transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-50"
+                        title="Archive product"
+                      >
+                        <Archive size={14} />
+                      </button>
+                      <div className="absolute bottom-2 left-2">
+                        <StockBadge quantity={product.availableQuantity} minStock={product.minStock} />
+                      </div>
+                    </div>
+
+                    {/* Card body */}
+                    <div className="p-3 sm:p-4">
+                      <h3 className="font-semibold text-gray-900 text-sm truncate">{product.productName}</h3>
+                      <p className="text-[11px] text-gray-400 font-mono mt-0.5">{product.articleId}</p>
+
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="inline-flex px-2 py-0.5 rounded bg-terracotta-50 text-terracotta-700 text-[11px] font-medium">{product.category}</span>
+                        <span className="text-[11px] text-gray-500 truncate">{product.subCategory}</span>
+                      </div>
+
+                      <p className="text-lg font-bold text-gray-900 mt-2">{formatCurrency(product.sellingPrice)}</p>
+                      <p className="text-[11px] text-gray-400">Cost {formatCurrency(product.productCost)}</p>
+
+                      <div className="flex items-center justify-between text-[11px] pt-3 mt-3 border-t border-gray-100">
+                        <span className="text-gray-500" title={`In Stock ${product.instockQuantity} − Active Units ${product.quantityInActiveOrders}`}>Available <span className="font-semibold text-gray-900">{product.availableQuantity}</span></span>
+                        <span className="text-gray-500" title={`${product.quantityInActiveOrders} unit(s) committed`}>Active <span className="font-semibold text-gray-900">{product.activeOrderCount || 0}</span></span>
+                        <span className="text-gray-500">Sold <span className="font-semibold text-gray-900">{product.totalOrders}</span></span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+                {visibleProducts.length === 0 && (
+                  <div className="col-span-full text-center py-8 text-gray-500 text-sm">No products found</div>
+                )}
+              </div>
+
+              {/* ─── Lazy load sentinel + count ─── */}
+              {visibleCount < sorted.length && (
+                <div ref={sentinelRef} className="py-4 text-center text-sm text-gray-400">Loading more...</div>
+              )}
+              <div className="text-center text-sm text-gray-500 py-1">
+                Showing {visibleProducts.length} of {sorted.length} product{sorted.length !== 1 ? 's' : ''}
+              </div>
+            </>
+          )}
         </>
       )}
 
