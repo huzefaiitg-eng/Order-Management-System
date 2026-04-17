@@ -408,24 +408,20 @@ export default function Inventory() {
                               )}
                             </div>
                             <p className="text-xs text-gray-400 font-mono mt-0.5">{p.articleId} · {p.category}</p>
-                            {/* Mobile: orders/15d below meta */}
-                            {p.ordersLast15Days > 0 && (
+                            {/* Mobile: orders/30d below meta — only when > 0 */}
+                            {p.ordersLast30Days > 0 && (
                               <p className="md:hidden text-xs font-medium text-indigo-600 mt-0.5">
-                                {p.ordersLast15Days} {p.ordersLast15Days === 1 ? 'order' : 'orders'} in last 15 days
+                                {p.ordersLast30Days} {p.ordersLast30Days === 1 ? 'order' : 'orders'} in last 30 days
                               </p>
                             )}
                           </div>
 
-                          {/* Center: orders/15d — desktop only */}
+                          {/* Center: orders/30d — desktop only, always shown */}
                           <div className="hidden md:flex flex-col items-center justify-center shrink-0 w-24 text-center">
-                            {p.ordersLast15Days > 0 ? (
-                              <>
-                                <span className="text-lg font-bold text-indigo-600 leading-none">{p.ordersLast15Days}</span>
-                                <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">orders / 15 days</span>
-                              </>
-                            ) : (
-                              <span className="text-sm text-gray-200">—</span>
-                            )}
+                            <span className={`text-lg font-bold leading-none ${p.ordersLast30Days > 0 ? 'text-indigo-600' : 'text-gray-300'}`}>
+                              {p.ordersLast30Days}
+                            </span>
+                            <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">orders / 30 days</span>
                           </div>
 
                           {/* Right: stock status */}
@@ -433,9 +429,9 @@ export default function Inventory() {
                             {p.alertType === 'out' ? (
                               <>
                                 <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full whitespace-nowrap">Out of Stock</span>
-                                {p.outOfStockSince && (
-                                  <p className="text-[10px] text-gray-400 mt-0.5">since {formatOutOfStockSince(p.outOfStockSince)}</p>
-                                )}
+                                <p className="text-[10px] mt-0.5 text-gray-400">
+                                  {p.outOfStockSince ? `since ${formatOutOfStockSince(p.outOfStockSince)}` : 'not tracked'}
+                                </p>
                               </>
                             ) : (
                               <>
