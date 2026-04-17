@@ -492,6 +492,25 @@ async function getInventoryAuditHistory(sheetId, articleId) {
     .sort((a, b) => new Date(a.changedAt) - new Date(b.changedAt));
 }
 
+async function getAllInventoryAuditEntries(sheetId) {
+  const sheets = await getClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "'Inventory Audit'!A2:H",
+  });
+  const rows = response.data.values || [];
+  return rows.map(row => ({
+    articleId: row[0] || '',
+    productName: row[1] || '',
+    changeType: row[2] || '',
+    previousQty: parseInt(row[3]) || 0,
+    newQty: parseInt(row[4]) || 0,
+    delta: parseInt(row[5]) || 0,
+    reason: row[6] || '',
+    changedAt: row[7] || '',
+  }));
+}
+
 async function adjustStock(sheetId, articleId, { delta, reason, changeType }) {
   const products = await getAllInventory(sheetId);
   const product = products.find(p => p.articleId === articleId);
@@ -879,7 +898,7 @@ module.exports = {
   getAllInventory, getProductByArticleId, addProduct, updateProduct,
   archiveProduct, unarchiveProduct, deleteProduct,
   addAuditEntry, getAuditHistory,
-  addInventoryAuditEntry, getInventoryAuditHistory, adjustStock, getOrderByRowIndex,
+  addInventoryAuditEntry, getInventoryAuditHistory, getAllInventoryAuditEntries, adjustStock, getOrderByRowIndex,
   getSheetNames,
   getCategories, addCategorySetting, deleteCategorySetting, deleteCategoryAll,
 };

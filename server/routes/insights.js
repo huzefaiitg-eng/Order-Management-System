@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getAllOrders, getAllInventory } = require('../services/sheets');
+const { getAllOrders, getAllInventory, getAllInventoryAuditEntries } = require('../services/sheets');
 
 const DELAYED_THRESHOLD_DAYS = 3;
 const LOW_MARGIN_THRESHOLD = 0.1;
@@ -15,10 +15,12 @@ router.get('/', async (req, res) => {
 
     const needsOrders = scope === 'all' || scope === 'orders' || scope === 'customers' || scope === 'inventory';
     const needsInventory = scope === 'all' || scope === 'inventory';
+    const needsInventoryAudit = scope === 'all' || scope === 'inventory';
 
-    const [orders, inventory] = await Promise.all([
+    const [orders, inventory, inventoryAuditEntries] = await Promise.all([
       needsOrders ? getAllOrders(sheetId) : Promise.resolve([]),
       needsInventory ? getAllInventory(sheetId) : Promise.resolve([]),
+      needsInventoryAudit ? getAllInventoryAuditEntries(sheetId).catch(() => []) : Promise.resolve([]),
     ]);
 
     const now = new Date();
@@ -77,6 +79,15 @@ router.get('/', async (req, res) => {
             if (!line.productName) return;
             orders15dByProduct[line.productName] = (orders15dByProduct[line.productName] || 0) + 1;
           });
+        }
+      });
+
+      // "Out of stock since" — find the most recent audit entry where newQty === 0 per articleId
+      // Entries are sorted ascending by changedAt, so iterating forwards gives us the latest per product
+      var outOfStockSinceByProduct = {};
+      inventoryAuditEntries.forEach(entry => {
+        if (entry.newQty === 0 && entry.articleId) {
+          outOfStockSinceByProduct[entry.articleId] = entry.changedAt;
         }
       });
     }
@@ -154,7 +165,7 @@ router.get('/', async (req, res) => {
 
       result.outOfStockProducts = enrichedInventory
         .filter(p => p.instockQuantity === 0)
-        .map(p => ({ articleId: p.articleId, productName: p.productName, category: p.category, subCategory: p.subCategory, ordersLast15Days: orders15dByProduct[p.productName] || 0 }));
+        .map(p => ({ articleId: p.articleId, productName: p.productName, category: p.category, subCategory: p.subCategory, ordersLast15Days: orders15dByProduct[p.productName] || 0, outOfStockSince: outOfStockSinceByProduct[p.articleId] || null }));
 
       const bestSellingProducts = Object.entries(productOrderStats)
         .map(([name, stats]) => ({

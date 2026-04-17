@@ -26,6 +26,22 @@ const SORT_OPTIONS = [
   { key: 'most_sold',   label: 'Most sold',           sortField: 'totalOrders',       sortDir: 'desc' },
 ];
 
+function formatOutOfStockSince(isoDate) {
+  if (!isoDate) return null;
+  const date = new Date(isoDate);
+  if (isNaN(date.getTime())) return null;
+  const diffDays = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 14) return '1 week ago';
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  if (diffDays < 60) return '1 month ago';
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+  const yrs = Math.floor(diffDays / 365);
+  return `${yrs} year${yrs > 1 ? 's' : ''} ago`;
+}
+
 function AddProductModal({ onClose, onAdded, categories, categorySubCategories }) {
   const [form, setForm] = useState({
     productName: '', category: '', subCategory: '', productCost: '', sellingPrice: '', instockQuantity: '', productDescription: '', imageUrls: [], minStock: '5', maxStock: '',
@@ -377,7 +393,8 @@ export default function Inventory() {
                   ) : (
                     <div className="divide-y divide-gray-50">
                       {stockAlerts.map((p, i) => (
-                        <div key={i} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                        <div key={i} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                          {/* Left: name + pill + meta */}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 min-w-0">
                               <Link to={`/inventory/${encodeURIComponent(p.articleId)}`}
@@ -390,21 +407,42 @@ export default function Inventory() {
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-2.5 mt-0.5">
-                              <p className="text-xs text-gray-400 font-mono shrink-0">{p.articleId} · {p.category}</p>
-                              {p.ordersLast15Days > 0 && (
-                                <span className="text-[11px] font-medium text-blue-600 shrink-0">{p.ordersLast15Days} orders / 15d</span>
-                              )}
-                            </div>
+                            <p className="text-xs text-gray-400 font-mono mt-0.5">{p.articleId} · {p.category}</p>
+                            {/* Mobile: orders/15d below meta */}
+                            {p.ordersLast15Days > 0 && (
+                              <p className="md:hidden text-xs font-medium text-indigo-600 mt-0.5">
+                                {p.ordersLast15Days} {p.ordersLast15Days === 1 ? 'order' : 'orders'} in last 15 days
+                              </p>
+                            )}
                           </div>
-                          <div className="text-right shrink-0 ml-2">
-                            {p.alertType === 'out'
-                              ? <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Out of Stock</span>
-                              : <>
-                                  <p className="text-xs font-semibold text-amber-700">{p.availableQuantity} left</p>
-                                  <p className="text-[10px] text-gray-400">min {p.minStock}</p>
-                                </>
-                            }
+
+                          {/* Center: orders/15d — desktop only */}
+                          <div className="hidden md:flex flex-col items-center justify-center shrink-0 w-24 text-center">
+                            {p.ordersLast15Days > 0 ? (
+                              <>
+                                <span className="text-lg font-bold text-indigo-600 leading-none">{p.ordersLast15Days}</span>
+                                <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">orders / 15 days</span>
+                              </>
+                            ) : (
+                              <span className="text-sm text-gray-200">—</span>
+                            )}
+                          </div>
+
+                          {/* Right: stock status */}
+                          <div className="text-right shrink-0">
+                            {p.alertType === 'out' ? (
+                              <>
+                                <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full whitespace-nowrap">Out of Stock</span>
+                                {p.outOfStockSince && (
+                                  <p className="text-[10px] text-gray-400 mt-0.5">since {formatOutOfStockSince(p.outOfStockSince)}</p>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-xs font-semibold text-amber-700">{p.availableQuantity} left</p>
+                                <p className="text-[10px] text-gray-400">min {p.minStock}</p>
+                              </>
+                            )}
                           </div>
                         </div>
                       ))}
