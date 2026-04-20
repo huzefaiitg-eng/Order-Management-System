@@ -14,6 +14,11 @@ const isActiveOrder = (status) => {
   return !TERMINAL_STATUSES.includes(String(status).trim());
 };
 
+function parseCategories(raw) {
+  if (!raw) return [];
+  return String(raw).split(',').map(s => s.trim()).filter(Boolean);
+}
+
 router.get('/summary', async (req, res) => {
   try {
     const { sheetId } = req.user;
@@ -42,9 +47,11 @@ router.get('/summary', async (req, res) => {
 
     const categoryBreakdown = {};
     activeProducts.forEach(p => {
-      if (!categoryBreakdown[p.category]) categoryBreakdown[p.category] = { count: 0, value: 0 };
-      categoryBreakdown[p.category].count++;
-      categoryBreakdown[p.category].value += p.productCost * p.instockQuantity;
+      parseCategories(p.category).forEach(cat => {
+        if (!categoryBreakdown[cat]) categoryBreakdown[cat] = { count: 0, value: 0 };
+        categoryBreakdown[cat].count++;
+        categoryBreakdown[cat].value += p.productCost * p.instockQuantity;
+      });
     });
 
     res.json({ success: true, data: { totalProducts, totalInventoryValue, lowStockCount, outOfStockCount, categoryBreakdown } });
@@ -57,7 +64,10 @@ router.get('/summary', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { sheetId } = req.user;
-    const { productName, category, subCategory, productCost, sellingPrice, instockQuantity, productDescription, productImages, minStock, maxStock } = req.body;
+    const { productName, productCost, sellingPrice, instockQuantity, productDescription, productImages, minStock, maxStock } = req.body;
+    let { category, subCategory } = req.body;
+    if (Array.isArray(category)) category = category.join(',');
+    if (Array.isArray(subCategory)) subCategory = subCategory.join(',');
     if (!productName || !category || !subCategory || productCost === undefined || instockQuantity === undefined) {
       return res.status(400).json({ success: false, error: 'Product name, category, sub-category, cost, and instock quantity are required' });
     }
@@ -118,8 +128,12 @@ router.get('/', async (req, res) => {
       const q = search.toLowerCase();
       result = result.filter(p => p.productName.toLowerCase().includes(q) || p.articleId.toLowerCase().includes(q) || p.productDescription.toLowerCase().includes(q));
     }
-    if (category) result = result.filter(p => p.category.toLowerCase() === category.toLowerCase());
-    if (subCategory) result = result.filter(p => p.subCategory.toLowerCase() === subCategory.toLowerCase());
+    if (category) result = result.filter(p =>
+      parseCategories(p.category).some(c => c.toLowerCase() === category.toLowerCase())
+    );
+    if (subCategory) result = result.filter(p =>
+      parseCategories(p.subCategory).some(s => s.toLowerCase() === subCategory.toLowerCase())
+    );
 
     res.json({ success: true, data: result });
   } catch (error) {
@@ -210,6 +224,8 @@ router.patch('/:articleId', async (req, res) => {
     const { sheetId } = req.user;
     const articleId = decodeURIComponent(req.params.articleId);
     const updates = req.body;
+    if (updates.category !== undefined && Array.isArray(updates.category)) updates.category = updates.category.join(',');
+    if (updates.subCategory !== undefined && Array.isArray(updates.subCategory)) updates.subCategory = updates.subCategory.join(',');
     if (updates.productCost !== undefined) updates.productCost = parseFloat(updates.productCost);
     if (updates.sellingPrice !== undefined) updates.sellingPrice = parseFloat(updates.sellingPrice);
     if (updates.instockQuantity !== undefined) updates.instockQuantity = parseInt(updates.instockQuantity);

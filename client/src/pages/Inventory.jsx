@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee, Plus, X, Archive, SlidersHorizontal, ArrowUpDown, Lightbulb, TrendingUp, Clock, RotateCcw, Star } from 'lucide-react';
+import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee, Plus, X, Archive, SlidersHorizontal, ArrowUpDown, Lightbulb, TrendingUp, Clock, RotateCcw, Star, LayoutGrid, ChevronDown, ChevronRight } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
 import { useInventory } from '../hooks/useInventory';
 import { fetchInventorySummary, addProduct, archiveProduct } from '../services/api';
@@ -13,6 +13,7 @@ import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 import { useInventoryInsights } from '../hooks/useInventoryInsights';
 import InsightSection from '../components/InsightSection';
+import { parseCategories, joinCategories } from '../utils/categoryUtils';
 
 const BATCH_SIZE = 25;
 
@@ -44,14 +45,14 @@ function formatOutOfStockSince(isoDate) {
 
 function AddProductModal({ onClose, onAdded, categories, categorySubCategories }) {
   const [form, setForm] = useState({
-    productName: '', category: '', subCategory: '', productCost: '', sellingPrice: '', instockQuantity: '', productDescription: '', imageUrls: [], minStock: '5', maxStock: '',
+    productName: '', categories: [], subCategories: [], productCost: '', sellingPrice: '', instockQuantity: '', productDescription: '', imageUrls: [], minStock: '5', maxStock: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.productName || !form.category || !form.subCategory || !form.productCost || !form.sellingPrice || !form.instockQuantity) {
+    if (!form.productName || !form.categories.length || !form.subCategories.length || !form.productCost || !form.sellingPrice || !form.instockQuantity) {
       setError('Product name, category, sub-category, cost, selling price, and instock quantity are required');
       return;
     }
@@ -60,8 +61,8 @@ function AddProductModal({ onClose, onAdded, categories, categorySubCategories }
     try {
       await addProduct({
         productName: form.productName,
-        category: form.category,
-        subCategory: form.subCategory,
+        category: joinCategories(form.categories),
+        subCategory: joinCategories(form.subCategories),
         productDescription: form.productDescription,
         productImages: form.imageUrls.join(','),
         productCost: parseFloat(form.productCost),
@@ -93,23 +94,50 @@ function AddProductModal({ onClose, onAdded, categories, categorySubCategories }
             <input type="text" value={form.productName} onChange={e => setForm({ ...form, productName: e.target.value })}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500" placeholder="Product name" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value, subCategory: '' })}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
-                <option value="">Select</option>
-                {categories.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+            <div className="flex flex-wrap gap-1.5">
+              {categories.map(c => (
+                <button key={c} type="button"
+                  onClick={() => setForm(f => ({
+                    ...f,
+                    categories: f.categories.includes(c) ? f.categories.filter(x => x !== c) : [...f.categories, c],
+                    subCategories: [],
+                  }))}
+                  className={`px-2.5 py-1 rounded-lg border text-xs transition-colors ${
+                    form.categories.includes(c)
+                      ? 'bg-terracotta-50 border-terracotta-300 text-terracotta-700 font-medium'
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}>{c}</button>
+              ))}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Sub Category *</label>
-              <select value={form.subCategory} onChange={e => setForm({ ...form, subCategory: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
-                <option value="">Select</option>
-                {(categorySubCategories[form.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sub Category *</label>
+            {(() => {
+              const availableSubs = form.categories.length > 0
+                ? [...new Set(form.categories.flatMap(c => categorySubCategories[c] || []))]
+                : [...new Set(Object.values(categorySubCategories).flat())];
+              return (
+                <div className="flex flex-wrap gap-1.5">
+                  {availableSubs.length === 0
+                    ? <p className="text-xs text-gray-400">Select a category first</p>
+                    : availableSubs.map(s => (
+                        <button key={s} type="button"
+                          onClick={() => setForm(f => ({
+                            ...f,
+                            subCategories: f.subCategories.includes(s) ? f.subCategories.filter(x => x !== s) : [...f.subCategories, s],
+                          }))}
+                          className={`px-2.5 py-1 rounded-lg border text-xs transition-colors ${
+                            form.subCategories.includes(s)
+                              ? 'bg-terracotta-50 border-terracotta-300 text-terracotta-700 font-medium'
+                              : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                          }`}>{s}</button>
+                      ))
+                  }
+                </div>
+              );
+            })()}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -201,6 +229,9 @@ export default function Inventory() {
   // Lazy loading
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
   const sentinelRef = useRef(null);
+
+  // Category Insights accordion state
+  const [expandedCategories, setExpandedCategories] = useState(new Set());
 
   const activeFilterCount = (appliedCategory ? 1 : 0) + (appliedSubCategory ? 1 : 0);
 
@@ -546,6 +577,82 @@ export default function Inventory() {
                   </>
                 )}
               </InsightSection>
+
+              {/* 6. Category Insights */}
+              <div className="lg:col-span-2">
+                <InsightSection icon={LayoutGrid} title="Category Insights" count={insightsData.categoryInsights?.length ?? 0} color="purple">
+                  {(insightsData.categoryInsights?.length ?? 0) === 0 ? (
+                    <p className="text-sm text-gray-500">No category data available</p>
+                  ) : (
+                    <div className="divide-y divide-gray-50">
+                      {insightsData.categoryInsights.map(cat => {
+                        const isExpanded = expandedCategories.has(cat.category);
+                        return (
+                          <div key={cat.category} className="py-3 first:pt-0 last:pb-0">
+                            <button type="button"
+                              onClick={() => setExpandedCategories(prev => {
+                                const next = new Set(prev);
+                                isExpanded ? next.delete(cat.category) : next.add(cat.category);
+                                return next;
+                              })}
+                              className="w-full flex items-center justify-between gap-3 text-left group"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                {isExpanded
+                                  ? <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                                  : <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                                }
+                                <span className="text-sm font-semibold text-gray-900 group-hover:text-terracotta-600 transition-colors">{cat.category}</span>
+                                <span className="text-xs text-gray-400">{cat.totalProducts} products</span>
+                              </div>
+                              <div className="flex items-center gap-4 shrink-0">
+                                <div className="text-right">
+                                  <p className="text-xs font-semibold text-gray-800">{cat.totalOrders} orders</p>
+                                  <p className="text-[10px] text-gray-400">{formatCurrency(cat.totalRevenue)}</p>
+                                </div>
+                                <div className="text-right w-16">
+                                  <p className={`text-xs font-semibold ${cat.returnRate > 0.2 ? 'text-red-600' : cat.returnRate > 0.1 ? 'text-amber-600' : 'text-green-600'}`}>
+                                    {Math.round(cat.returnRate * 100)}% return
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {cat.outOfStockCount > 0 && (
+                                    <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">{cat.outOfStockCount} OOS</span>
+                                  )}
+                                  {cat.lowStockCount > 0 && (
+                                    <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full">{cat.lowStockCount} low</span>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+
+                            {isExpanded && (
+                              <div className="mt-2 ml-5 space-y-0 border-l-2 border-gray-100 pl-3">
+                                {cat.subCategories.length === 0 ? (
+                                  <p className="text-xs text-gray-400 py-1">No sub-category data</p>
+                                ) : (
+                                  <>
+                                    {cat.subCategories.map(sub => (
+                                      <div key={sub.subCategory} className="flex items-center justify-between gap-3 py-1.5">
+                                        <span className="text-xs text-gray-700">{sub.subCategory}</span>
+                                        <div className="flex items-center gap-4 text-right shrink-0">
+                                          <p className="text-xs font-medium text-gray-700">{sub.totalOrders} orders</p>
+                                          <p className="text-[10px] text-gray-400 w-20">{formatCurrency(sub.totalRevenue)}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    <p className="text-[10px] text-gray-400 pt-1.5">Stock value: {formatCurrency(cat.stockValue)}</p>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </InsightSection>
+              </div>
             </div>
           )}
         </>
@@ -671,8 +778,10 @@ export default function Inventory() {
                       <p className="text-[11px] text-gray-400 font-mono mt-0.5">{product.articleId}</p>
 
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="inline-flex px-2 py-0.5 rounded bg-terracotta-50 text-terracotta-700 text-[11px] font-medium">{product.category}</span>
-                        <span className="text-[11px] text-gray-500 truncate">{product.subCategory}</span>
+                        {parseCategories(product.category).map(c => (
+                          <span key={c} className="inline-flex px-2 py-0.5 rounded bg-terracotta-50 text-terracotta-700 text-[11px] font-medium">{c}</span>
+                        ))}
+                        <span className="text-[11px] text-gray-500 truncate">{parseCategories(product.subCategory).join(' · ')}</span>
                       </div>
 
                       <p className="text-lg font-bold text-gray-900 mt-2">{formatCurrency(product.sellingPrice)}</p>

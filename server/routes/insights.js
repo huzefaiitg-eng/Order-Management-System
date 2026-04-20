@@ -7,6 +7,11 @@ const LOW_MARGIN_THRESHOLD = 0.1;
 const CHURN_DAYS_THRESHOLD = 60;
 const HIGH_RETURN_RATE_THRESHOLD = 0.2;
 
+function parseCategories(raw) {
+  if (!raw) return [];
+  return String(raw).split(',').map(s => s.trim()).filter(Boolean);
+}
+
 // GET /api/insights?scope=orders|customers|inventory (default: all)
 router.get('/', async (req, res) => {
   try {
@@ -211,6 +216,61 @@ router.get('/', async (req, res) => {
         }))
         .filter(p => p.returnRate > HIGH_RETURN_RATE_THRESHOLD)
         .sort((a, b) => b.returnRate - a.returnRate);
+
+      // ── Category & Sub-category Insights ─────────────────────────────────
+      const categoryStats = {};
+      const ensureCat = (cat) => {
+        if (!categoryStats[cat]) {
+          categoryStats[cat] = { totalProducts: 0, totalOrders: 0, totalRevenue: 0, returnedOrders: 0, stockValue: 0, lowStockCount: 0, outOfStockCount: 0, subCategories: {} };
+        }
+        return categoryStats[cat];
+      };
+
+      // Pass 1: stock health from enrichedInventory
+      enrichedInventory.forEach(p => {
+        parseCategories(p.category).forEach(cat => {
+          const c = ensureCat(cat);
+          c.totalProducts++;
+          c.stockValue += (p.instockQuantity || 0) * (p.productCost || 0);
+          if (p.instockQuantity === 0) c.outOfStockCount++;
+          else if (p.availableQuantity < (p.minStock || 5)) c.lowStockCount++;
+          parseCategories(p.subCategory).forEach(sub => {
+            if (!c.subCategories[sub]) c.subCategories[sub] = { totalOrders: 0, totalRevenue: 0 };
+          });
+        });
+      });
+
+      // Pass 2: order stats from productOrderStats via productLookup
+      Object.entries(productOrderStats).forEach(([name, stats]) => {
+        const product = productLookup[name];
+        if (!product) return;
+        parseCategories(product.category).forEach(cat => {
+          const c = categoryStats[cat];
+          if (!c) return;
+          c.totalOrders += stats.totalOrders;
+          c.totalRevenue += stats.totalRevenue;
+          c.returnedOrders += (stats.returnedOrders || 0);
+          parseCategories(product.subCategory).forEach(sub => {
+            if (!c.subCategories[sub]) c.subCategories[sub] = { totalOrders: 0, totalRevenue: 0 };
+            c.subCategories[sub].totalOrders += stats.totalOrders;
+            c.subCategories[sub].totalRevenue += stats.totalRevenue;
+          });
+        });
+      });
+
+      result.categoryInsights = Object.entries(categoryStats).map(([catName, data]) => ({
+        category: catName,
+        totalProducts: data.totalProducts,
+        totalOrders: data.totalOrders,
+        totalRevenue: data.totalRevenue,
+        returnRate: data.totalOrders > 0 ? data.returnedOrders / data.totalOrders : 0,
+        stockValue: data.stockValue,
+        lowStockCount: data.lowStockCount,
+        outOfStockCount: data.outOfStockCount,
+        subCategories: Object.entries(data.subCategories)
+          .map(([sub, d]) => ({ subCategory: sub, totalOrders: d.totalOrders, totalRevenue: d.totalRevenue }))
+          .sort((a, b) => b.totalOrders - a.totalOrders),
+      })).sort((a, b) => b.totalOrders - a.totalOrders);
 
       // Max stock alerts — products exceeding their max stock cap
       result.maxStockAlerts = enrichedInventory

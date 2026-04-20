@@ -4,6 +4,7 @@ import { Package, ShoppingBag, RotateCcw, TrendingUp, Pencil, X, Check, Archive,
 import ImageUpload from '../components/ImageUpload';
 import { fetchProductByArticleId, updateProduct, archiveProduct, adjustStock, fetchStockAudit } from '../services/api';
 import { formatCurrency, formatPercent } from '../utils/formatters';
+import { parseCategories, joinCategories } from '../utils/categoryUtils';
 import { useCategories } from '../hooks/useCategories';
 import StockBadge from '../components/StockBadge';
 import StatusBadge from '../components/StatusBadge';
@@ -103,8 +104,8 @@ export default function ProductDetail() {
   const startEditing = () => {
     setEditForm({
       productName: product.productName,
-      category: product.category,
-      subCategory: product.subCategory,
+      category: parseCategories(product.category),
+      subCategory: parseCategories(product.subCategory),
       productCost: product.productCost,
       sellingPrice: product.sellingPrice,
       minStock: product.minStock ?? 5,
@@ -116,7 +117,7 @@ export default function ProductDetail() {
   };
 
   const handleSave = async () => {
-    if (!editForm.productName || !editForm.category || !editForm.subCategory) {
+    if (!editForm.productName || !editForm.category.length || !editForm.subCategory.length) {
       setEditError('Product name, category, and sub-category are required');
       return;
     }
@@ -126,8 +127,8 @@ export default function ProductDetail() {
       const productImages = editForm.imageUrls.join(',');
       const updates = {
         productName: editForm.productName,
-        category: editForm.category,
-        subCategory: editForm.subCategory,
+        category: joinCategories(editForm.category),
+        subCategory: joinCategories(editForm.subCategory),
         productCost: parseFloat(editForm.productCost),
         sellingPrice: parseFloat(editForm.sellingPrice),
         minStock: parseInt(editForm.minStock) || 0,
@@ -249,12 +250,12 @@ export default function ProductDetail() {
 
               {/* Badges */}
               <div className="flex flex-wrap gap-2">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-terracotta-100 text-terracotta-800">
-                  {product.category}
-                </span>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                  {product.subCategory}
-                </span>
+                {parseCategories(product.category).map(c => (
+                  <span key={c} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-terracotta-100 text-terracotta-800">{c}</span>
+                ))}
+                {parseCategories(product.subCategory).map(s => (
+                  <span key={s} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">{s}</span>
+                ))}
                 <StockBadge quantity={product.availableQuantity} minStock={minStock} />
               </div>
 
@@ -472,22 +473,50 @@ export default function ProductDetail() {
                 <input type="text" value={editForm.productName} onChange={e => setEditForm({ ...editForm, productName: e.target.value })}
                   className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 w-full" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Category</label>
-                  <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value, subCategory: '' })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
-                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Category</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {categories.map(c => (
+                    <button key={c} type="button"
+                      onClick={() => setEditForm(f => ({
+                        ...f,
+                        category: f.category.includes(c) ? f.category.filter(x => x !== c) : [...f.category, c],
+                        subCategory: [],
+                      }))}
+                      className={`px-2.5 py-1 rounded-lg border text-xs transition-colors ${
+                        editForm.category.includes(c)
+                          ? 'bg-terracotta-50 border-terracotta-300 text-terracotta-700 font-medium'
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}>{c}</button>
+                  ))}
                 </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Sub Category</label>
-                  <select value={editForm.subCategory} onChange={e => setEditForm({ ...editForm, subCategory: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-terracotta-500">
-                    <option value="">Select</option>
-                    {(categorySubCategories[editForm.category] || []).map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Sub Category</label>
+                {(() => {
+                  const availableSubs = editForm.category.length > 0
+                    ? [...new Set(editForm.category.flatMap(c => categorySubCategories[c] || []))]
+                    : [...new Set(Object.values(categorySubCategories).flat())];
+                  return (
+                    <div className="flex flex-wrap gap-1.5">
+                      {availableSubs.length === 0
+                        ? <p className="text-xs text-gray-400">Select a category first</p>
+                        : availableSubs.map(s => (
+                            <button key={s} type="button"
+                              onClick={() => setEditForm(f => ({
+                                ...f,
+                                subCategory: f.subCategory.includes(s) ? f.subCategory.filter(x => x !== s) : [...f.subCategory, s],
+                              }))}
+                              className={`px-2.5 py-1 rounded-lg border text-xs transition-colors ${
+                                editForm.subCategory.includes(s)
+                                  ? 'bg-terracotta-50 border-terracotta-300 text-terracotta-700 font-medium'
+                                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                              }`}>{s}</button>
+                          ))
+                      }
+                    </div>
+                  );
+                })()}
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
