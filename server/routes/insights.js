@@ -101,7 +101,11 @@ router.get('/', async (req, res) => {
 
     // ── Order Insights ────────────────────────────────────────────────────
     if (scope === 'all' || scope === 'orders') {
-      result.codFollowUps = orders.filter(o => o.modeOfPayment === 'COD' && o.orderStatus === 'Delivered');
+      result.codFollowUps = orders.filter(o =>
+        o.modeOfPayment === 'COD' &&
+        o.orderStatus === 'Delivered' &&
+        o.paymentStatus !== 'Fully Paid'
+      );
 
       result.delayedOrders = orders.filter(o => {
         if (terminalStatuses.includes(o.orderStatus)) return false;
