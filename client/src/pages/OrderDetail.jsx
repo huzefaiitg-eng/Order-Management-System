@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Phone, MapPin, Package, CreditCard, Clock, FileText } from 'lucide-react';
-import { fetchOrders, updateOrderStatus, fetchOrderAudit } from '../services/api';
+import { Phone, MapPin, Package, CreditCard, Clock, FileText, Wallet } from 'lucide-react';
+import { fetchOrders, updateOrderStatus, updatePaymentStatus, fetchOrderAudit } from '../services/api';
 import StatusBadge from '../components/StatusBadge';
 import StatusSelect from '../components/StatusSelect';
 import DetailOverlay from '../components/DetailOverlay';
@@ -11,6 +11,21 @@ import { formatCurrency, ORDER_STATUSES, STATUS_COLORS } from '../utils/formatte
 import BillModal from '../components/BillModal';
 
 const STATUS_FLOW = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered'];
+const PAYMENT_STATUSES = ['Unpaid', 'Partial Paid', 'Fully Paid'];
+
+function PaymentStatusBadge({ status }) {
+  const styles = {
+    'Fully Paid':   'bg-green-50 text-green-700 border-green-200',
+    'Partial Paid': 'bg-amber-50 text-amber-700 border-amber-200',
+    'Unpaid':       'bg-red-50 text-red-600 border-red-200',
+  };
+  const label = status || 'Unpaid';
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${styles[label] || styles['Unpaid']}`}>
+      {label}
+    </span>
+  );
+}
 
 export default function OrderDetail() {
   const { rowIndex } = useParams();
@@ -20,6 +35,10 @@ export default function OrderDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showBill, setShowBill] = useState(false);
+  const [editingPayment, setEditingPayment] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ status: 'Unpaid', amount: '' });
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [paymentToast, setPaymentToast] = useState(null);
 
   const loadData = async () => {
     try {
@@ -47,6 +66,33 @@ export default function OrderDetail() {
   useEffect(() => {
     loadData();
   }, [rowIndex]);
+
+  const openPaymentEditor = () => {
+    setPaymentForm({
+      status: order.paymentStatus || 'Fully Paid',
+      amount: order.paidAmount > 0 ? String(order.paidAmount) : '',
+    });
+    setEditingPayment(true);
+    setPaymentToast(null);
+  };
+
+  const handlePaymentSave = async () => {
+    setSavingPayment(true);
+    try {
+      const paidAmount = paymentForm.status === 'Fully Paid' ? order.pricePaid
+        : paymentForm.status === 'Unpaid' ? 0
+        : parseFloat(paymentForm.amount) || 0;
+      await updatePaymentStatus(order.rowIndex, { paymentStatus: paymentForm.status, paidAmount });
+      setOrder(prev => ({ ...prev, paymentStatus: paymentForm.status, paidAmount }));
+      setEditingPayment(false);
+      setPaymentToast({ type: 'success', msg: 'Payment status updated' });
+      setTimeout(() => setPaymentToast(null), 3000);
+    } catch (err) {
+      setPaymentToast({ type: 'error', msg: err.message || 'Failed to update' });
+    } finally {
+      setSavingPayment(false);
+    }
+  };
 
   const handleStatusUpdate = async (newStatus) => {
     await updateOrderStatus(order.rowIndex, newStatus);
@@ -174,6 +220,75 @@ export default function OrderDetail() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Payment Status */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Wallet size={16} className="text-gray-400" />
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment Status</h2>
+            </div>
+            {!editingPayment && (
+              <button onClick={openPaymentEditor}
+                className="text-xs text-terracotta-600 hover:text-terracotta-700 font-medium">
+                Change
+              </button>
+            )}
+          </div>
+
+          {paymentToast && (
+            <p className={`text-xs mb-3 px-2 py-1 rounded ${paymentToast.type === 'success' ? 'text-green-700 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+              {paymentToast.msg}
+            </p>
+          )}
+
+          {!editingPayment ? (
+            <div className="space-y-2">
+              <PaymentStatusBadge status={order.paymentStatus} />
+              {order.paymentStatus === 'Partial Paid' && order.paidAmount > 0 && (
+                <div className="text-xs text-gray-600 space-y-0.5 mt-2">
+                  <p>Received: <span className="font-semibold text-green-700">{formatCurrency(order.paidAmount)}</span></p>
+                  <p>Remaining: <span className="font-semibold text-red-600">{formatCurrency(order.pricePaid - order.paidAmount)}</span></p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-1.5">
+                {PAYMENT_STATUSES.map(s => (
+                  <button key={s} type="button"
+                    onClick={() => setPaymentForm(f => ({ ...f, status: s, amount: s === 'Partial Paid' ? f.amount : '' }))}
+                    className={`px-2.5 py-1 rounded-lg border text-xs transition-colors ${
+                      paymentForm.status === s
+                        ? 'bg-terracotta-50 border-terracotta-300 text-terracotta-700 font-medium'
+                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}>{s}</button>
+                ))}
+              </div>
+              {paymentForm.status === 'Partial Paid' && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Amount Received</label>
+                  <input type="number" min="0" max={order.pricePaid} step="0.01"
+                    value={paymentForm.amount}
+                    onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500"
+                    placeholder={`0 – ${order.pricePaid}`} />
+                  <p className="text-[11px] text-gray-400 mt-0.5">Order total: {formatCurrency(order.pricePaid)}</p>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={handlePaymentSave} disabled={savingPayment}
+                  className="px-3 py-1.5 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50">
+                  {savingPayment ? 'Saving...' : 'Save'}
+                </button>
+                <button onClick={() => setEditingPayment(false)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Audit History */}

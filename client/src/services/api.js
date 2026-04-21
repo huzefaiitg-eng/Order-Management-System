@@ -92,6 +92,13 @@ export function addOrder(orderData) {
   });
 }
 
+export function updatePaymentStatus(rowIndex, { paymentStatus, paidAmount }) {
+  return request(`/orders/${rowIndex}/payment`, {
+    method: 'PATCH',
+    body: JSON.stringify({ paymentStatus, paidAmount }),
+  });
+}
+
 export function fetchOrderAudit(rowIndex) {
   return request(`/orders/${rowIndex}/audit`);
 }

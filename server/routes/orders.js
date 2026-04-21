@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getAllOrders, updateOrderStatus, addOrder, getOrderStatus, addAuditEntry, getAuditHistory, getAllCustomers, getAllInventory, adjustStock, getOrderByRowIndex } = require('../services/sheets');
+const { getAllOrders, updateOrderStatus, updatePaymentStatus, addOrder, getOrderStatus, addAuditEntry, getAuditHistory, getAllCustomers, getAllInventory, adjustStock, getOrderByRowIndex } = require('../services/sheets');
 
 const VALID_STATUSES = [
   'Pending', 'Confirmed', 'Packed', 'Shipped',
@@ -210,6 +210,31 @@ router.patch('/:rowIndex', async (req, res) => {
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error updating order status:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+const VALID_PAYMENT_STATUSES = ['Unpaid', 'Partial Paid', 'Fully Paid'];
+
+// PATCH /api/orders/:rowIndex/payment — update payment status (and optional partial amount)
+router.patch('/:rowIndex/payment', async (req, res) => {
+  try {
+    const { sheetId } = req.user;
+    const rowIndex = parseInt(req.params.rowIndex);
+    const { paymentStatus, paidAmount } = req.body;
+
+    if (!paymentStatus || !VALID_PAYMENT_STATUSES.includes(paymentStatus)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid paymentStatus. Must be one of: ${VALID_PAYMENT_STATUSES.join(', ')}`,
+      });
+    }
+
+    const resolvedPaidAmount = paymentStatus === 'Unpaid' ? 0 : (parseFloat(paidAmount) || 0);
+    const result = await updatePaymentStatus(sheetId, rowIndex, { paymentStatus, paidAmount: resolvedPaidAmount });
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error updating payment status:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -641,7 +641,7 @@ export default function Orders() {
                       { key: 'customerName', label: 'Customer' }, { key: 'productOrdered', label: 'Product' },
                       { key: 'quantityOrdered', label: 'Qty' }, { key: 'modeOfPayment', label: 'Payment' },
                       { key: 'pricePaid', label: 'Price' }, { key: 'discount', label: 'Discount' }, { key: 'profit', label: 'Profit' },
-                      { key: 'orderStatus', label: 'Status' }, { key: null, label: 'Actions' },
+                      { key: 'paymentStatus', label: 'Paid?' }, { key: 'orderStatus', label: 'Status' }, { key: null, label: 'Actions' },
                     ].map(col => (
                       <th key={col.label} onClick={() => col.key && handleSort(col.key)}
                         className={`px-4 py-3 text-left font-medium text-gray-600 whitespace-nowrap ${col.key ? 'cursor-pointer hover:text-gray-900' : ''}`}>
@@ -678,6 +678,13 @@ export default function Orders() {
                       <td className="px-4 py-3 font-medium text-gray-900">{formatCurrency(order.pricePaid)}</td>
                       <td className="px-4 py-3 text-gray-600">{order.discount > 0 ? formatCurrency(order.discount) : '-'}</td>
                       <td className={`px-4 py-3 font-medium ${order.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(order.profit)}</td>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const s = order.paymentStatus || 'Fully Paid';
+                          const styles = { 'Fully Paid': 'bg-green-50 text-green-700 border-green-200', 'Partial Paid': 'bg-amber-50 text-amber-700 border-amber-200', 'Unpaid': 'bg-red-50 text-red-600 border-red-200' };
+                          return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${styles[s] || styles['Unpaid']}`}>{s}</span>;
+                        })()}
+                      </td>
                       <td className="px-4 py-3"><StatusSelect currentStatus={order.orderStatus} onUpdate={(s) => updateStatus(order.rowIndex, s)} /></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -718,7 +725,14 @@ export default function Orders() {
                       <span className="text-sm font-semibold text-gray-900">{formatCurrency(order.pricePaid)}</span>
                       <span className={`text-xs font-medium ${order.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(order.profit)}</span>
                     </div>
-                    <StatusBadge status={order.orderStatus} />
+                    <div className="flex items-center gap-1.5">
+                      {(() => {
+                        const s = order.paymentStatus || 'Fully Paid';
+                        const styles = { 'Fully Paid': 'bg-green-50 text-green-700 border-green-200', 'Partial Paid': 'bg-amber-50 text-amber-700 border-amber-200', 'Unpaid': 'bg-red-50 text-red-600 border-red-200' };
+                        return <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${styles[s] || styles['Unpaid']}`}>{s}</span>;
+                      })()}
+                      <StatusBadge status={order.orderStatus} />
+                    </div>
                   </div>
                 </Link>
                 {/* ⋮ Action menu */}

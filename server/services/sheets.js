@@ -45,6 +45,8 @@ const COLUMN_MAP = {
   orderNumber: 11,
   sellingPrice: 12,
   discount: 13,
+  paymentStatus: 14,  // Column O — 'Unpaid' | 'Partial Paid' | 'Fully Paid'
+  paidAmount: 15,     // Column P — amount received (used for Partial Paid)
 };
 
 function rowToOrder(row, rowIndex) {
@@ -75,6 +77,11 @@ function rowToOrder(row, rowIndex) {
     subtotal,
     orderStatus: row[COLUMN_MAP.orderStatus] || '',
     orderNumber: row[COLUMN_MAP.orderNumber] || '',
+    // paymentStatus defaults to 'Fully Paid' for existing orders that predate this field
+    paymentStatus: row[COLUMN_MAP.paymentStatus] || 'Fully Paid',
+    paidAmount: row[COLUMN_MAP.paidAmount] !== undefined && row[COLUMN_MAP.paidAmount] !== ''
+      ? (parseFloat(row[COLUMN_MAP.paidAmount]) || 0)
+      : 0,
     productLines: productsRaw.length > 0 ? productsRaw.map((name, i) => ({
       productName: name,
       unitCost: costsRaw[i] || 0,
@@ -91,7 +98,7 @@ async function getAllOrders(sheetId) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'Orders!A2:N',
+    range: 'Orders!A2:P',
   });
 
   const rows = response.data.values || [];
@@ -112,6 +119,19 @@ async function updateOrderStatus(sheetId, rowIndex, newStatus) {
   });
 
   return { rowIndex, orderStatus: newStatus };
+}
+
+async function updatePaymentStatus(sheetId, rowIndex, { paymentStatus, paidAmount }) {
+  const sheets = await getClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `Orders!O${rowIndex}:P${rowIndex}`,
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [[paymentStatus, String(paidAmount || 0)]],
+    },
+  });
+  return { rowIndex, paymentStatus, paidAmount: paidAmount || 0 };
 }
 
 // ── Customers ───────────────────────────────────────────────
@@ -359,10 +379,10 @@ async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerP
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: 'Orders!A:N',
+    range: 'Orders!A:P',
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[orderFrom, orderDate, customerName, customerPhone, customerAddress || '', modeOfPayment, productStr, costStr, qtyStr, pricePaid, 'Pending', orderNumber, sellingPriceStr, discount || 0]],
+      values: [[orderFrom, orderDate, customerName, customerPhone, customerAddress || '', modeOfPayment, productStr, costStr, qtyStr, pricePaid, 'Pending', orderNumber, sellingPriceStr, discount || 0, 'Unpaid', 0]],
     },
   });
 
@@ -395,6 +415,8 @@ async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerP
     subtotal,
     orderStatus: 'Pending',
     orderNumber,
+    paymentStatus: 'Unpaid',
+    paidAmount: 0,
     productLines: productsArr.map((name, i) => ({
       productName: name,
       unitCost: costsArr[i] || 0,
@@ -892,7 +914,7 @@ async function deleteCategoryAll(sheetId, category) {
 
 module.exports = {
   getClient,
-  getAllOrders, updateOrderStatus, addOrder, getOrderStatus,
+  getAllOrders, updateOrderStatus, updatePaymentStatus, addOrder, getOrderStatus,
   getAllCustomers, getCustomerByPhone, addCustomer, updateCustomer,
   archiveCustomer, unarchiveCustomer, deleteCustomer,
   getAllInventory, getProductByArticleId, addProduct, updateProduct,
