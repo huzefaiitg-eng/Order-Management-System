@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ShoppingBag, TrendingUp, BarChart3, Wallet,
-  Users, Package,
+  Package,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -155,7 +155,7 @@ export default function Dashboard() {
   if (error) return <ErrorMessage message={error} />;
   if (!data) return null;
 
-  const { customerKpis, inventoryKpis } = data;
+  const { inventoryKpis } = data;
   const pieLabel = isMobile ? false : ({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`;
 
   // Chip builders (one per card)
@@ -347,43 +347,24 @@ export default function Dashboard() {
         </FilterableCard>
       </div>
 
-      {/* ── 4. Customers + Inventory (unfiltered) ─────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <SimpleGroupCard title="Customers" icon={Users} iconBg="bg-blue-50 text-blue-600">
-          <div className="grid grid-cols-3 gap-1">
-            <StatItem label="Total" value={customerKpis.totalCustomers ?? '—'} to="/customers?tab=details" />
-            <StatItem
-              label="Active"
-              value={customerKpis.activeCustomers ?? '—'}
-              to="/customers?tab=details&hasActiveOrders=true"
-              color="green"
-            />
-            <StatItem
-              label="New (7 days)"
-              value={customerKpis.newCustomers7d ?? '—'}
-              to="/customers?tab=details"
-            />
-          </div>
-        </SimpleGroupCard>
-
-        <SimpleGroupCard title="Inventory" icon={Package} iconBg="bg-amber-50 text-amber-600">
-          <div className="grid grid-cols-3 gap-1">
-            <StatItem label="Total" value={inventoryKpis.totalInventory ?? '—'} to="/inventory?tab=details" />
-            <StatItem
-              label="Low Stock"
-              value={inventoryKpis.lowStockCount ?? '—'}
-              to="/inventory?tab=details&stockFilter=lowStock"
-              color="amber"
-            />
-            <StatItem
-              label="Out of Stock"
-              value={inventoryKpis.outOfStockCount ?? '—'}
-              to="/inventory?tab=details&stockFilter=outOfStock"
-              color="red"
-            />
-          </div>
-        </SimpleGroupCard>
-      </div>
+      {/* ── 4. Inventory (unfiltered) ─────────────────────────────────────── */}
+      <SimpleGroupCard title="Inventory" icon={Package} iconBg="bg-amber-50 text-amber-600">
+        <div className="grid grid-cols-3 gap-1">
+          <StatItem label="Total" value={inventoryKpis.totalInventory ?? '—'} to="/inventory?tab=details" />
+          <StatItem
+            label="Low Stock"
+            value={inventoryKpis.lowStockCount ?? '—'}
+            to="/inventory?tab=details&stockFilter=lowStock"
+            color="amber"
+          />
+          <StatItem
+            label="Out of Stock"
+            value={inventoryKpis.outOfStockCount ?? '—'}
+            to="/inventory?tab=details&stockFilter=outOfStock"
+            color="red"
+          />
+        </div>
+      </SimpleGroupCard>
 
       {/* ── Filter Modals (one per card) ──────────────────────────────────── */}
       <CardFilterModal

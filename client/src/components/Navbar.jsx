@@ -8,11 +8,11 @@ const omsNavItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/orders',    label: 'Orders',    icon: ShoppingBag },
   { path: '/inventory', label: 'Inventory', icon: Package },
-  { path: '/customers', label: 'Customers', icon: Users },
 ];
 
 const crmNavItems = [
-  { path: '/leads', label: 'Leads', icon: Target },
+  { path: '/leads',     label: 'Leads',     icon: Target },
+  { path: '/customers', label: 'Customers', icon: Users },
 ];
 
 function getInitials(name) {
@@ -36,7 +36,7 @@ export default function Navbar() {
   const switcherRef = useRef(null);
   const navRef = useRef(null);
 
-  const isCRM = pathname.startsWith('/leads');
+  const isCRM = pathname.startsWith('/leads') || pathname.startsWith('/customers');
   const navItems = isCRM ? crmNavItems : omsNavItems;
 
   // Close avatar dropdown on outside click
@@ -89,7 +89,7 @@ export default function Navbar() {
                 <span className="text-xl">📦</span>
                 <div>
                   <p className="text-sm font-medium text-gray-900">Order Management</p>
-                  <p className="text-xs text-gray-400">Orders · Inventory · Customers</p>
+                  <p className="text-xs text-gray-400">Orders · Inventory</p>
                 </div>
                 {!isCRM && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-terracotta-500" />}
               </button>
@@ -100,7 +100,7 @@ export default function Navbar() {
                 <span className="text-xl">🎯</span>
                 <div>
                   <p className="text-sm font-medium text-gray-900">Lead Management</p>
-                  <p className="text-xs text-gray-400">Track · Convert · Grow</p>
+                  <p className="text-xs text-gray-400">Leads · Customers</p>
                 </div>
                 {isCRM && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-terracotta-500" />}
               </button>
@@ -112,7 +112,7 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-1">
           {navItems.map(({ path, label, icon: Icon }) => {
             const isActive = isCRM
-              ? pathname.startsWith('/leads')
+              ? pathname.startsWith(path)
               : pathname === path;
             return (
               <Link
@@ -227,7 +227,7 @@ export default function Navbar() {
       {mobileOpen && (
         <div className="md:hidden border-t border-gray-800 px-4 py-3 space-y-1">
           {navItems.map(({ path, label, icon: Icon }) => {
-            const isActive = isCRM ? pathname.startsWith('/leads') : pathname === path;
+            const isActive = isCRM ? pathname.startsWith(path) : pathname === path;
             return (
               <Link
                 key={path}
