@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   Target, TrendingUp, DollarSign, CalendarClock,
   Plus, LayoutList, Columns3, Search, X, SlidersHorizontal,
-  Phone, Package, AlertCircle, RefreshCw,
+  Phone, Package, AlertCircle, RefreshCw, Lightbulb,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -898,20 +898,21 @@ export default function Leads() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-3 border-b border-gray-200 -mt-2">
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
         {[
-          { id: 'insights', label: 'Insights' },
-          { id: 'list', label: `All Leads${leads.length > 0 ? ` (${leads.length})` : ''}` },
-        ].map(({ id, label }) => (
+          { id: 'insights', label: 'Insights',  icon: Lightbulb },
+          { id: 'list',     label: `All Leads${leads.length > 0 ? ` (${leads.length})` : ''}`, icon: LayoutList },
+        ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               tab === id
-                ? 'border-terracotta-500 text-terracotta-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'bg-white text-terracotta-700 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
             }`}
           >
+            <Icon size={15} />
             {label}
           </button>
         ))}
