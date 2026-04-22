@@ -4,6 +4,7 @@ import {
   Target, TrendingUp, DollarSign, CalendarClock,
   Plus, LayoutList, Columns3, Search, X, SlidersHorizontal,
   Phone, Package, AlertCircle, RefreshCw, Lightbulb,
+  Flame, Zap, Snowflake, ArrowRight, TrendingDown, ArrowUpRight,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -11,9 +12,11 @@ import {
 import { useLeads } from '../hooks/useLeads';
 import { useLeadInsights } from '../hooks/useLeadInsights';
 import { addLead, updateLead, deleteLead, fetchInventory, fetchCustomers, addCustomer } from '../services/api';
+import { resolveTimeRange } from '../utils/dashboardAggregations';
 import KpiCard from '../components/KpiCard';
 import InsightSection from '../components/InsightSection';
 import SearchableDropdown from '../components/SearchableDropdown';
+import TimePresetPicker from '../components/TimePresetPicker';
 import Loader from '../components/Loader';
 
 // ── Constants ─────────────────────────────────────────────────
@@ -651,49 +654,348 @@ function LeadTable({ leads, onStatusChange, onDelete }) {
   );
 }
 
-// ── Insights Tab ──────────────────────────────────────────────
+// ── Follow-up Lead Card ───────────────────────────────────────
 
-function InsightsTab({ insights }) {
-  const {
-    totalLeads, newThisMonth, conversionRate, totalPipelineValue,
-    followUpsDueToday, byStatus, bySource,
-  } = insights;
+function FollowUpLeadCard({ lead, urgency }) {
+  const products = parseProducts(lead.productsInterested);
+  // urgency: 'overdue' | 'today' | 'upcoming'
+  const dateColor =
+    urgency === 'overdue' ? 'text-red-600 bg-red-50 border-red-200' :
+    urgency === 'today'   ? 'text-amber-700 bg-amber-50 border-amber-200' :
+                            'text-gray-600 bg-gray-50 border-gray-200';
 
   return (
-    <div className="space-y-6">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          title="Total Leads"
-          value={totalLeads}
-          subtitle={`${newThisMonth} added this month`}
-          icon={Target}
-          color="terracotta"
-        />
-        <KpiCard
-          title="Conversion Rate"
-          value={`${conversionRate}%`}
-          subtitle="Leads converted to orders"
-          icon={TrendingUp}
-          color="green"
-        />
-        <KpiCard
-          title="Pipeline Value"
-          value={totalPipelineValue > 0 ? `₹${(totalPipelineValue / 1000).toFixed(1)}k` : '—'}
-          subtitle="Sum of active lead budgets"
-          icon={DollarSign}
-          color="blue"
-        />
-        <KpiCard
-          title="Follow-ups Due Today"
-          value={followUpsDueToday.length}
-          subtitle="Leads to follow up today"
-          icon={CalendarClock}
-          color={followUpsDueToday.length > 0 ? 'amber' : 'terracotta'}
-        />
+    <div className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 hover:shadow-sm transition-all">
+      {/* Row 1 */}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <span className="text-sm font-semibold text-gray-900 truncate">{lead.customerName}</span>
+          <StatusBadge status={lead.leadStatus} />
+          {lead.leadSource && (
+            <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{lead.leadSource}</span>
+          )}
+        </div>
+        <Link
+          to={`/leads/${lead.leadId}`}
+          className="flex items-center gap-1 text-xs text-terracotta-600 hover:text-terracotta-700 shrink-0 font-medium"
+        >
+          View <ArrowRight size={12} />
+        </Link>
       </div>
 
-      {/* Charts */}
+      {/* Row 2: Products */}
+      {products.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {products.map((p, i) => (
+            <span key={i} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">{p}</span>
+          ))}
+        </div>
+      )}
+
+      {/* Row 3: Budget + Phone + Date */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <a href={`tel:${lead.customerPhone}`} className="flex items-center gap-1 text-xs text-gray-500 hover:text-terracotta-600">
+          <Phone size={11} />
+          <span className="font-mono">{lead.customerPhone}</span>
+        </a>
+        {lead.budget > 0 && (
+          <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+            {formatBudget(lead.budget)}
+          </span>
+        )}
+        {lead.followUpDate && (
+          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${dateColor}`}>
+            📅 {lead.followUpDate}
+            {urgency === 'overdue' && ' (overdue)'}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Insights Tab ──────────────────────────────────────────────
+
+function InsightsTab({ leads }) {
+  const [timePreset, setTimePreset] = useState('all');
+  const [customRange, setCustomRange] = useState({ startDate: '', endDate: '' });
+  const [followUpFilter, setFollowUpFilter] = useState('today');
+
+  const timeRange = resolveTimeRange(timePreset, customRange);
+  const insights = useLeadInsights(leads, timeRange);
+
+  const {
+    filteredLeadCount, filteredConvertedCount, filteredConversionRate,
+    totalPipelineValue, estimatedRevenue,
+    hotLeads, warmLeads, coldLeads, hotLeadRevenuePotential,
+    overdueFollowUps, followUpsTodayList, followUpsNext5Days,
+    topProducts, maxProductLeadCount,
+    byStatus, bySource,
+    totalLeads,
+    conversionRate,
+  } = insights;
+
+  // followUpsFilter tabs
+  const followUpTabs = [
+    { id: 'overdue', label: 'Overdue', list: overdueFollowUps },
+    { id: 'today',   label: 'Today',   list: followUpsTodayList },
+    { id: 'next5',   label: 'Next 5 Days', list: followUpsNext5Days },
+  ];
+  const activeFollowUps = followUpTabs.find(t => t.id === followUpFilter)?.list ?? [];
+
+  const totalFollowUps = overdueFollowUps.length + followUpsTodayList.length + followUpsNext5Days.length;
+
+  function formatCrore(v) {
+    if (v >= 10_000_000) return `₹${(v / 10_000_000).toFixed(1)}Cr`;
+    if (v >= 100_000)    return `₹${(v / 100_000).toFixed(1)}L`;
+    if (v >= 1_000)      return `₹${(v / 1_000).toFixed(1)}k`;
+    return `₹${v}`;
+  }
+
+  return (
+    <div className="space-y-5">
+
+      {/* ── Section 1: Combined Leads + Conversion with time filter ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div className="flex items-center gap-8">
+            <div>
+              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-0.5">Total Leads</p>
+              <p className="text-3xl font-bold text-gray-900">{filteredLeadCount}</p>
+              {filteredConvertedCount > 0 && (
+                <p className="text-xs text-gray-400 mt-0.5">{filteredConvertedCount} converted</p>
+              )}
+            </div>
+            <div className="h-12 w-px bg-gray-100" />
+            <div>
+              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-0.5">Conversion Rate</p>
+              <p className="text-3xl font-bold text-green-600">{filteredConversionRate}%</p>
+              <p className="text-xs text-gray-400 mt-0.5">Leads → Orders</p>
+            </div>
+          </div>
+          <div className="shrink-0">
+            <Target size={28} className="text-terracotta-400" />
+          </div>
+        </div>
+        <div className="border-t border-gray-100 pt-4">
+          <TimePresetPicker
+            preset={timePreset}
+            customRange={customRange}
+            onChange={({ preset, customRange: cr }) => {
+              setTimePreset(preset);
+              setCustomRange(cr);
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ── Section 2: Hot / Warm / Cold classification ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Hot */}
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-1.5 bg-red-100 rounded-lg">
+              <Flame size={16} className="text-red-500" />
+            </div>
+            <span className="text-sm font-semibold text-red-800">Hot Leads</span>
+          </div>
+          <p className="text-3xl font-bold text-red-600 mb-1">{hotLeads.length}</p>
+          <p className="text-xs text-red-500">Engaged + follow-up overdue or today</p>
+          {hotLeads.length > 0 && (
+            <p className="text-xs font-semibold text-red-700 mt-2">
+              {formatCrore(hotLeads.reduce((s, l) => s + (l.budget || 0), 0))} potential
+            </p>
+          )}
+        </div>
+
+        {/* Warm */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-1.5 bg-amber-100 rounded-lg">
+              <Zap size={16} className="text-amber-500" />
+            </div>
+            <span className="text-sm font-semibold text-amber-800">Warm Leads</span>
+          </div>
+          <p className="text-3xl font-bold text-amber-600 mb-1">{warmLeads.length}</p>
+          <p className="text-xs text-amber-600">Follow-up scheduled or recently engaged</p>
+          {warmLeads.length > 0 && (
+            <p className="text-xs font-semibold text-amber-700 mt-2">
+              {formatCrore(warmLeads.reduce((s, l) => s + (l.budget || 0), 0))} potential
+            </p>
+          )}
+        </div>
+
+        {/* Cold */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-1.5 bg-slate-100 rounded-lg">
+              <Snowflake size={16} className="text-slate-400" />
+            </div>
+            <span className="text-sm font-semibold text-slate-700">Cold Leads</span>
+          </div>
+          <p className="text-3xl font-bold text-slate-500 mb-1">{coldLeads.length}</p>
+          <p className="text-xs text-slate-500">No engagement in 30+ days</p>
+          {coldLeads.length > 0 && (
+            <p className="text-xs font-semibold text-slate-600 mt-2">Consider a re-engagement message</p>
+          )}
+        </div>
+      </div>
+
+      {/* ── Section 3: Pipeline Value with revenue estimates ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="p-2 bg-blue-50 rounded-lg border border-blue-200">
+            <DollarSign size={16} className="text-blue-600" />
+          </div>
+          <h3 className="text-sm font-semibold text-gray-900">Pipeline Value</h3>
+        </div>
+
+        <div className="flex items-end gap-2 mb-4">
+          <p className="text-3xl font-bold text-gray-900">
+            {totalPipelineValue > 0 ? formatCrore(totalPipelineValue) : '—'}
+          </p>
+          <p className="text-sm text-gray-400 mb-1">total active pipeline</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <ArrowUpRight size={14} className="text-green-600" />
+              <p className="text-xs font-medium text-green-700">Est. revenue at current rate</p>
+            </div>
+            <p className="text-xl font-bold text-green-700">
+              {estimatedRevenue > 0 ? formatCrore(estimatedRevenue) : '—'}
+            </p>
+            <p className="text-xs text-green-600 mt-0.5">
+              If {filteredConversionRate > 0 ? filteredConversionRate : conversionRate ?? 0}% of pipeline converts
+            </p>
+          </div>
+
+          <div className="bg-terracotta-50 border border-terracotta-200 rounded-lg p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Flame size={14} className="text-terracotta-600" />
+              <p className="text-xs font-medium text-terracotta-700">If all hot leads convert</p>
+            </div>
+            <p className="text-xl font-bold text-terracotta-700">
+              {hotLeadRevenuePotential > 0 ? formatCrore(hotLeadRevenuePotential) : '—'}
+            </p>
+            <p className="text-xs text-terracotta-600 mt-0.5">{hotLeads.length} hot lead{hotLeads.length !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Section 4: Follow-ups ── */}
+      <div className="bg-white rounded-xl border border-gray-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-50 rounded-lg border border-amber-200">
+              <CalendarClock size={18} className="text-amber-600" />
+            </div>
+            <h2 className="text-base font-semibold text-gray-900">Follow-ups</h2>
+            <span className="text-sm font-medium text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full">
+              {totalFollowUps}
+            </span>
+          </div>
+
+          {/* Filter pills */}
+          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+            {followUpTabs.map(({ id, label, list }) => (
+              <button
+                key={id}
+                onClick={() => setFollowUpFilter(id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                  followUpFilter === id
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {label}
+                {list.length > 0 && (
+                  <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-semibold ${
+                    followUpFilter === id
+                      ? id === 'overdue'
+                        ? 'bg-red-100 text-red-600'
+                        : id === 'today'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-blue-100 text-blue-600'
+                      : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {list.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Cards */}
+        <div className="p-5">
+          {activeFollowUps.length === 0 ? (
+            <div className="text-center py-8">
+              <CalendarClock size={24} className="text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">
+                {followUpFilter === 'overdue' ? 'No overdue follow-ups. Great job! 🎉' :
+                 followUpFilter === 'today'   ? 'No follow-ups scheduled for today.' :
+                 'No follow-ups in the next 5 days.'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {activeFollowUps.map(lead => (
+                <FollowUpLeadCard
+                  key={lead.leadId}
+                  lead={lead}
+                  urgency={followUpFilter === 'overdue' ? 'overdue' : followUpFilter === 'today' ? 'today' : 'upcoming'}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Section 5: Product Demand ── */}
+      {topProducts.length > 0 && (
+        <InsightSection icon={Package} title="What Customers Want" count={topProducts.length} color="purple">
+          <div className="space-y-3">
+            {topProducts.map((product, i) => {
+              const barPct = Math.round((product.leadCount / (maxProductLeadCount || 1)) * 100);
+              const convRate = product.leadCount > 0
+                ? Math.round((product.convertedCount / product.leadCount) * 100)
+                : 0;
+              return (
+                <div key={product.name} className="relative">
+                  {/* Background bar */}
+                  <div
+                    className="absolute inset-y-0 left-0 bg-indigo-50 rounded-lg"
+                    style={{ width: `${barPct}%` }}
+                  />
+                  {/* Content */}
+                  <div className="relative flex items-center gap-3 px-3 py-2.5 rounded-lg">
+                    <span className="text-xs font-bold text-gray-400 w-5 shrink-0">#{i + 1}</span>
+                    <p className="text-sm font-medium text-gray-900 flex-1 truncate">{product.name}</p>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-gray-500">{product.leadCount} lead{product.leadCount !== 1 ? 's' : ''}</span>
+                      {convRate > 0 && (
+                        <span className="text-xs font-semibold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                          {convRate}% conv
+                        </span>
+                      )}
+                      {product.pipelineValue > 0 && (
+                        <span className="text-xs font-semibold text-indigo-600">
+                          ₹{(product.pipelineValue / 1000).toFixed(0)}k
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </InsightSection>
+      )}
+
+      {/* ── Section 6: Charts ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Funnel */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -735,39 +1037,6 @@ function InsightsTab({ insights }) {
           )}
         </div>
       </div>
-
-      {/* Follow-ups due today */}
-      {followUpsDueToday.length > 0 && (
-        <InsightSection icon={CalendarClock} title="Follow-ups Due Today" count={followUpsDueToday.length} color="amber">
-          <div className="divide-y divide-gray-100 -mx-5 px-5">
-            {followUpsDueToday.map(lead => (
-              <div key={lead.leadId} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Link to={`/leads/${lead.leadId}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate">
-                      {lead.customerName}
-                    </Link>
-                    <StatusBadge status={lead.leadStatus} />
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <Phone size={11} className="text-gray-400" />
-                    <span className="text-xs text-gray-500 font-mono">{lead.customerPhone}</span>
-                    {parseProducts(lead.productsInterested).length > 0 && (
-                      <span className="text-xs text-gray-400">·</span>
-                    )}
-                    <span className="text-xs text-indigo-600 truncate">
-                      {parseProducts(lead.productsInterested).join(', ')}
-                    </span>
-                  </div>
-                </div>
-                {lead.budget > 0 && (
-                  <span className="text-xs font-semibold text-green-700 shrink-0">{formatBudget(lead.budget)}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </InsightSection>
-      )}
     </div>
   );
 }
@@ -791,7 +1060,6 @@ export default function Leads() {
   const [pendingSources, setPendingSources] = useState([]);
 
   const { leads, loading, error, refetch, setLeads } = useLeads();
-  const insights = useLeadInsights(leads);
 
   const totalApplied = appliedStatuses.length + appliedSources.length;
 
@@ -923,7 +1191,7 @@ export default function Leads() {
       ) : error ? (
         <div className="text-center py-20 text-red-500 text-sm">{error}</div>
       ) : tab === 'insights' ? (
-        <InsightsTab insights={insights} />
+        <InsightsTab leads={leads} />
       ) : (
         /* ── List tab ── */
         <div className="space-y-3">

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee, Plus, X, Archive, SlidersHorizontal, ArrowUpDown, Lightbulb, TrendingUp, Clock, RotateCcw, Star, LayoutGrid, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, RefreshCw, Package, AlertTriangle, PackageX, IndianRupee, Plus, X, Archive, SlidersHorizontal, ArrowUpDown, Lightbulb, TrendingUp, Clock, RotateCcw, Star, LayoutGrid, ChevronDown, ChevronRight, Flame } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
 import { useInventory } from '../hooks/useInventory';
 import { fetchInventorySummary, addProduct, archiveProduct } from '../services/api';
@@ -14,6 +14,7 @@ import ErrorMessage from '../components/ErrorMessage';
 import { useInventoryInsights } from '../hooks/useInventoryInsights';
 import InsightSection from '../components/InsightSection';
 import { parseCategories, joinCategories } from '../utils/categoryUtils';
+import { useLeads } from '../hooks/useLeads';
 
 const BATCH_SIZE = 25;
 
@@ -204,6 +205,9 @@ export default function Inventory() {
   // Inventory insights (always fetched — default tab)
   const { data: insightsData, loading: insightsLoading, error: insightsError } = useInventoryInsights();
 
+  // Leads (for demand cross-reference)
+  const { leads: allLeads } = useLeads();
+
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
   const { products, loading, error, refresh } = useInventory(filters);
@@ -234,6 +238,45 @@ export default function Inventory() {
   const [expandedCategories, setExpandedCategories] = useState(new Set());
 
   const activeFilterCount = (appliedCategory ? 1 : 0) + (appliedSubCategory ? 1 : 0);
+
+  // Cross-reference: low/out-of-stock products that appear in active leads
+  const leadsInDemand = useMemo(() => {
+    if (!insightsData?.stockAlerts || !allLeads?.length) return [];
+
+    // Collect low/out-of-stock products
+    const atRiskProducts = [
+      ...(insightsData.stockAlerts?.outOfStock ?? []),
+      ...(insightsData.stockAlerts?.lowStock ?? []),
+    ];
+
+    if (atRiskProducts.length === 0) return [];
+
+    // Active leads = not Converted, not Lost
+    const activeLeads = allLeads.filter(l => l.leadStatus !== 'Converted' && l.leadStatus !== 'Lost');
+
+    function parseProducts(str) {
+      if (!str) return [];
+      return str.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    const results = atRiskProducts.map(product => {
+      const matchingLeads = activeLeads.filter(l =>
+        parseProducts(l.productsInterested).some(p => p.toLowerCase() === (product.productName || '').toLowerCase())
+      );
+      const pipelineValue = matchingLeads.reduce((sum, l) => sum + (l.budget || 0), 0);
+      return {
+        ...product,
+        demandCount: matchingLeads.length,
+        pipelineValue,
+        isOutOfStock: (product.instockQuantity ?? product.availableQuantity ?? 0) === 0,
+      };
+    });
+
+    return results
+      .filter(p => p.demandCount > 0)
+      .sort((a, b) => b.demandCount - a.demandCount)
+      .slice(0, 10);
+  }, [insightsData, allLeads]);
 
   useEffect(() => {
     fetchInventorySummary().then(setSummary).catch(() => {});
@@ -578,7 +621,64 @@ export default function Inventory() {
                 )}
               </InsightSection>
 
-              {/* 6. Category Insights */}
+              {/* 6. Leads in Demand — Low / Out of Stock */}
+              <div className="lg:col-span-2">
+                <InsightSection
+                  icon={Flame}
+                  title="Leads in Demand — Low / Out of Stock"
+                  count={leadsInDemand.length}
+                  color="red"
+                >
+                  {leadsInDemand.length === 0 ? (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-gray-500">All in-demand products are well stocked 🎉</p>
+                      <p className="text-xs text-gray-400 mt-1">No active leads are requesting low or out-of-stock items.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-400 mb-1">Products with active lead demand that are low or out of stock — reorder these first.</p>
+                      {leadsInDemand.map((product, i) => (
+                        <div key={product.articleId || product.productName} className="flex items-center gap-3">
+                          <span className="text-xs font-bold text-gray-400 w-5 shrink-0">#{i + 1}</span>
+                          <div className="flex items-center justify-between gap-3 flex-1 min-w-0">
+                            <div className="min-w-0">
+                              {product.articleId
+                                ? <Link to={`/inventory/${encodeURIComponent(product.articleId)}`} className="text-sm font-medium text-gray-900 hover:text-terracotta-600 truncate block">{product.productName}</Link>
+                                : <p className="text-sm font-medium text-gray-900 truncate">{product.productName}</p>
+                              }
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {product.articleId && (
+                                  <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded font-mono">{product.articleId}</span>
+                                )}
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                                  product.isOutOfStock
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {product.isOutOfStock ? 'Out of Stock' : 'Low Stock'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs font-semibold text-red-600 flex items-center gap-1">
+                                <Flame size={11} className="text-red-400" />
+                                {product.demandCount} active lead{product.demandCount !== 1 ? 's' : ''}
+                              </p>
+                              {product.pipelineValue > 0 && (
+                                <p className="text-[10px] text-indigo-600 font-medium">
+                                  ₹{(product.pipelineValue / 1000).toFixed(0)}k pipeline
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </InsightSection>
+              </div>
+
+              {/* 7. Category Insights */}
               <div className="lg:col-span-2">
                 <InsightSection icon={LayoutGrid} title="Category Insights" count={insightsData.categoryInsights?.length ?? 0} color="purple">
                   {(insightsData.categoryInsights?.length ?? 0) === 0 ? (
