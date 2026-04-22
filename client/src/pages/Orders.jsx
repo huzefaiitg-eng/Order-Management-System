@@ -60,7 +60,7 @@ function CardActionMenu({ order, onStatusChange, onGenerateBill }) {
 }
 
 /* ─── AddOrderModal ─── */
-function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
+function AddOrderModal({ onClose, onAdded, onGenerateBill, prefill }) {
   const navigate = useNavigate();
   const { categories, categorySubCategories } = useCategories();
   const [modalStep, setModalStep] = useState('form'); // 'form' | 'confirmation'
@@ -81,12 +81,41 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill }) {
   const [savingCustomer, setSavingCustomer] = useState(false);
   const [savingProduct, setSavingProduct] = useState(false);
 
+  // Track whether prefill has been applied (so we only apply it once after data loads)
+  const prefillApplied = useRef({ customer: false, product: false });
+
   useEffect(() => {
     fetchCustomers('', 'Active').then(setCustomers).catch(() => {});
     fetchInventory({ status: 'Active' }).then(setProducts).catch(() => {});
   }, []);
 
   const handleCustomerSelect = (c) => setForm(f => ({ ...f, customerName: c.customerName, customerPhone: c.customerPhone, customerAddress: c.customerAddress }));
+
+  // Apply prefill customer once customers list has loaded
+  useEffect(() => {
+    if (!prefill || !customers.length || prefillApplied.current.customer) return;
+    prefillApplied.current.customer = true;
+    const match = customers.find(c => c.customerPhone === prefill.customerPhone);
+    if (match) {
+      handleCustomerSelect(match);
+    } else if (prefill.customerName) {
+      setForm(f => ({ ...f, customerName: prefill.customerName, customerPhone: prefill.customerPhone || '' }));
+    }
+  }, [prefill, customers]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply prefill product once inventory list has loaded
+  useEffect(() => {
+    if (!prefill || !prefill.productName || !products.length || prefillApplied.current.product) return;
+    prefillApplied.current.product = true;
+    const match = products.find(p => p.productName === prefill.productName);
+    if (match) {
+      setProductLines(prev => prev.map((line, i) => i === 0
+        ? { ...line, productName: match.productName, unitCost: match.productCost || 0, unitSellingPrice: match.sellingPrice || match.productCost || 0 }
+        : line));
+    } else {
+      setProductLines(prev => prev.map((line, i) => i === 0 ? { ...line, productName: prefill.productName } : line));
+    }
+  }, [prefill, products]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleProductSelectForLine = (idx, p) => {
     setProductLines(prev => prev.map((line, i) => i === idx ? { ...line, productName: p.productName, unitCost: p.productCost || 0, unitSellingPrice: p.sellingPrice || p.productCost || 0 } : line));
@@ -344,6 +373,25 @@ export default function Orders() {
   const [search, setSearch] = useState('');
   const { orders, loading, error, refresh, updateStatus } = useOrders(filters);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addOrderPrefill, setAddOrderPrefill] = useState(null);
+
+  // Auto-open AddOrderModal when navigated from LeadDetail with openAdd=1
+  useEffect(() => {
+    if (searchParams.get('openAdd') === '1') {
+      try {
+        const raw = sessionStorage.getItem('lead_order_prefill');
+        if (raw) {
+          setAddOrderPrefill(JSON.parse(raw));
+          sessionStorage.removeItem('lead_order_prefill');
+        }
+      } catch { /* ignore */ }
+      setShowAddModal(true);
+      // Remove the openAdd param from URL without re-render loop
+      const next = new URLSearchParams(searchParams);
+      next.delete('openAdd');
+      setSearchParams(next, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sorting
   const [sortField, setSortField] = useState('orderDate');
@@ -820,7 +868,7 @@ export default function Orders() {
 
       </>} {/* end All Orders tab */}
 
-      {showAddModal && <AddOrderModal onClose={() => setShowAddModal(false)} onAdded={refresh} onGenerateBill={setBillOrder} />}
+      {showAddModal && <AddOrderModal onClose={() => { setShowAddModal(false); setAddOrderPrefill(null); }} onAdded={refresh} onGenerateBill={setBillOrder} prefill={addOrderPrefill} />}
       {billOrder && <BillModal order={billOrder} onClose={() => setBillOrder(null)} />}
     </div>
   );

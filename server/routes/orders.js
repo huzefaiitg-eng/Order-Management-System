@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getAllOrders, updateOrderStatus, updatePaymentStatus, addOrder, getOrderStatus, addAuditEntry, getAuditHistory, getAllCustomers, getAllInventory, adjustStock, getOrderByRowIndex } = require('../services/sheets');
+const { getAllOrders, updateOrderStatus, updatePaymentStatus, addOrder, getOrderStatus, addAuditEntry, getAuditHistory, getAllCustomers, getAllInventory, adjustStock, getOrderByRowIndex, getCustomerByPhone, addCustomer } = require('../services/sheets');
 
 const VALID_STATUSES = [
   'Pending', 'Confirmed', 'Packed', 'Shipped',
@@ -121,6 +121,22 @@ router.post('/', async (req, res) => {
     });
 
     await addAuditEntry(sheetId, { orderRowIndex: result.rowIndex, previousStatus: '', newStatus: 'Pending' });
+
+    // Auto-create customer record if one doesn't exist for this phone
+    try {
+      const existing = await getCustomerByPhone(sheetId, customerPhone);
+      if (!existing) {
+        await addCustomer(sheetId, {
+          customerName,
+          customerPhone,
+          customerAddress: customerAddress || '',
+          customerEmail: '',
+        });
+      }
+    } catch (err) {
+      // Non-fatal — log and continue; customer may have been created concurrently
+      console.warn('Order creation: customer auto-create skipped:', err.message);
+    }
 
     // Stock side-effect: decrement instockQuantity for every product in this order
     try {

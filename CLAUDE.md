@@ -70,6 +70,23 @@ A web application for managing shoe orders coming from multiple sales channels (
 | New Status | Status after the change |
 | Changed At | ISO 8601 timestamp of the change |
 
+### Tab: `Leads`
+| Column | Description |
+|---|---|
+| Lead ID | Auto-generated unique ID (e.g., LEAD-001) |
+| Lead Date | Date the lead was created (DD/MM/YYYY) |
+| Customer Name | Full name of the potential customer |
+| Customer Phone | Contact number — used to link/create a Customer record |
+| Customer Email | Optional email address |
+| Products Interested | Comma-separated product names (links to Inventory) |
+| Lead Status | New Lead / Contacted / Interested / Follow-up / Converted / Lost |
+| Lead Source | WhatsApp / Instagram / Facebook / Referral / Walk-in/Offline |
+| Follow-up Date | Optional scheduled follow-up date (DD/MM/YYYY) |
+| Budget | Expected order value (₹) |
+| Notes | Free-text conversation history and preferences |
+| Converted Order Row | Row index of the linked OMS order (set on conversion) |
+| Created At | ISO 8601 creation timestamp |
+
 ### Order Statuses
 `Pending` → `Confirmed` → `Packed` → `Shipped` → `Out for Delivery` → `Delivered`
 Branch statuses: `Returned`, `Cancelled`, `Refunded`
@@ -258,6 +275,11 @@ server/
 - `DELETE /api/inventory/:articleId` — Permanently delete a product row from the sheet
 - `GET /api/inventory/:articleId` — Single product detail with order history
 - `PATCH /api/inventory/:articleId` — Update product details (name, category, sub-category, cost, instock qty)
+- `GET /api/leads` — All leads (supports `?status=`, `?source=`, `?search=`)
+- `POST /api/leads` — Create lead + auto-create/link customer in Customers sheet
+- `GET /api/leads/:leadId` — Single lead detail
+- `PATCH /api/leads/:leadId` — Update lead fields or status
+- `DELETE /api/leads/:leadId` — Delete lead
 
 ## Authentication
 
@@ -350,3 +372,82 @@ cd server && node seed-users.js    # Seed demo user in User Access sheet
 - All dates displayed in DD/MM/YYYY format (Indian locale)
 - Currency displayed in INR (₹) format
 - credentials.json must NEVER be committed to git
+
+---
+
+## 11. Lead Management (CRM)
+
+### Overview
+A second product module for tracking potential customers from first contact through conversion. The persona is the same as OMS — small retail shoe-business owners. The moat is simplicity + future WhatsApp automation. Phase 1 is fully manual lead tracking stored in a `Leads` tab in each user's existing Google Sheet.
+
+### Product Switcher
+The Navbar logo (top-left) is now a clickable product-switcher button (logo + ChevronDown). Clicking it opens a popover with two module tiles:
+- 📦 **Order Management** → `/dashboard`
+- 🎯 **Lead Management** → `/leads`
+
+When in CRM mode (pathname starts with `/leads`), the Navbar shows only a **Leads** nav item. OMS nav items (Dashboard, Orders, Inventory, Customers) are hidden. Switching back to OMS restores the full nav.
+
+### Lead Status Flow
+`New Lead` → `Contacted` → `Interested` → `Follow-up` → `Converted` / `Lost`
+
+Status badge colours (Tailwind):
+| Status | Classes |
+|---|---|
+| New Lead | `bg-slate-100 text-slate-700` |
+| Contacted | `bg-blue-100 text-blue-700` |
+| Interested | `bg-indigo-100 text-indigo-700` |
+| Follow-up | `bg-amber-100 text-amber-700` |
+| Converted | `bg-green-100 text-green-700` |
+| Lost | `bg-red-100 text-red-700` |
+
+### Lead Sources
+WhatsApp · Instagram · Facebook · Referral · Walk-in/Offline
+
+### Key Behaviours
+- **Auto-create customer**: When a lead is saved, the API checks if a Customer with the same phone number exists. If not, a new Customer record is created automatically in the Customers sheet.
+- **Multi-product interest**: Stored as a comma-separated string in column F (same pattern as category multi-select). Displayed as indigo pills in the UI.
+- **Conversion flow**: When a lead status is set to Converted, a "Create Order" button appears in LeadDetail. Clicking it stores prefill data in `sessionStorage` (`lead_order_prefill` key) and navigates to `/orders?tab=details&openAdd=1`. The Orders page detects this param on mount, reads the prefill, and auto-opens the AddOrderModal pre-filled with the lead's customer name, phone, and first product of interest.
+- **Linked order**: After creating the order, the `convertedOrderRow` field on the lead can be updated (via PATCH) to link back to the OMS order row index.
+- **Kanban board**: The List tab has a Table/Kanban toggle. Dragging a card between columns fires a PATCH to update lead status. HTML5 Drag and Drop API — no external library.
+- **Follow-up overdue highlight**: If `followUpDate` (DD/MM/YYYY) is before today, the date is shown in red.
+
+### Pages
+
+#### Leads page (`/leads`)
+- `?tab=insights` (default): 4 KPI cards (Total Leads, Conversion Rate, Pipeline Value, Follow-ups Due Today) + pipeline funnel chart (horizontal BarChart) + leads by source chart + "Follow-ups Due Today" insight section
+- `?tab=list`: filter bar (search + status dropdown + source dropdown) + Table/Kanban toggle + lazy-load table (25 per batch) or 6-column Kanban board
+
+#### Lead Detail page (`/leads/:leadId`)
+- Header: customer name, phone, email, Lead ID chip, status badge (inline-editable via quick-stage buttons)
+- Stats cards: Budget · Follow-up Date · Status · Linked Order
+- Products Interested section (pill list)
+- Notes section
+- Conversion section: shown when status = Converted; shows "Create Order" button (or "View Order" link if already converted)
+- Quick status change buttons: move lead to any other status with one click
+
+### Backend Structure (Lead Management)
+```
+server/
+  routes/leads.js          # Lead CRUD route handlers — GET, POST, GET/:id, PATCH/:id, DELETE/:id
+  services/leadsSheets.js  # Google Sheets operations for Leads tab
+                           # Functions: getAllLeads, getLeadById, addLead, updateLead, deleteLead
+                           # ensureLeadsTab auto-creates the Leads tab + header row on first use
+```
+
+### Frontend Structure (Lead Management)
+```
+src/
+  pages/
+    Leads.jsx       # Main page — exports StatusBadge, LEAD_STATUSES, STATUS_CONFIG (reused by LeadDetail)
+    LeadDetail.jsx  # Individual lead detail + edit + status change + conversion flow
+  hooks/
+    useLeads.js        # Fetch + filter leads; returns { leads, loading, error, refetch, setLeads }
+    useLeadInsights.js # Client-side analytics derived from leads array (pure useMemo, no API calls)
+  services/
+    api.js          # Leads functions: fetchLeads, fetchLeadById, addLead, updateLead, deleteLead
+```
+
+### Phase 2 (Future — WhatsApp Automation)
+- Trigger WhatsApp messages on lead status changes (e.g., auto-message when status → Contacted)
+- Broadcast to filtered lead segments
+- Auto-log WhatsApp replies as Notes on the lead

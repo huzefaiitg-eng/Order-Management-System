@@ -209,6 +209,38 @@ export function fetchStockAudit(articleId) {
   return request(`/inventory/${encodeURIComponent(articleId)}/stock-audit`);
 }
 
+// Leads
+export function fetchLeads(filters = {}) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.append(key, value);
+  });
+  const query = params.toString();
+  return request(`/leads${query ? `?${query}` : ''}`);
+}
+
+export function fetchLeadById(leadId) {
+  return request(`/leads/${encodeURIComponent(leadId)}`);
+}
+
+export function addLead(leadData) {
+  return request('/leads', {
+    method: 'POST',
+    body: JSON.stringify(leadData),
+  });
+}
+
+export function updateLead(leadId, updates) {
+  return request(`/leads/${encodeURIComponent(leadId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+}
+
+export function deleteLead(leadId) {
+  return request(`/leads/${encodeURIComponent(leadId)}`, { method: 'DELETE' });
+}
+
 // Upload
 export async function uploadImage(file) {
   const token = getToken();

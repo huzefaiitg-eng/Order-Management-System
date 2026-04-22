@@ -11,6 +11,7 @@ const customersRouter = require('./routes/customers');
 const inventoryRouter = require('./routes/inventory');
 const uploadRouter = require('./routes/upload');
 const settingsRouter = require('./routes/settings');
+const leadsRouter = require('./routes/leads');
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use('/api/customers', customersRouter);
 app.use('/api/inventory', inventoryRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/settings/categories', settingsRouter);
+app.use('/api/leads', leadsRouter);
 
 app.get('/api/debug/sheets', async (req, res) => {
   const { getSheetNames } = require('./services/sheets');
