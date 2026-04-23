@@ -592,6 +592,31 @@ async function getSheetId(sheetId, sheetName) {
   return sheet.properties.sheetId;
 }
 
+// ── Delete — Orders ──────────────────────────────────────────
+
+async function deleteOrder(sheetId, rowIndex) {
+  const tabSheetId = await getSheetId(sheetId, 'Orders');
+  const sheets = await getClient();
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: sheetId,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: tabSheetId,
+            dimension: 'ROWS',
+            startIndex: rowIndex - 1,  // 0-based; rowIndex is 1-based sheet row
+            endIndex: rowIndex,
+          },
+        },
+      }],
+    },
+  });
+
+  return { deleted: true, rowIndex };
+}
+
 // ── Archive / Unarchive / Delete — Customers ─────────────────
 
 async function archiveCustomer(sheetId, phone) {
@@ -914,7 +939,7 @@ async function deleteCategoryAll(sheetId, category) {
 
 module.exports = {
   getClient,
-  getAllOrders, updateOrderStatus, updatePaymentStatus, addOrder, getOrderStatus,
+  getAllOrders, updateOrderStatus, updatePaymentStatus, addOrder, getOrderStatus, deleteOrder,
   getAllCustomers, getCustomerByPhone, addCustomer, updateCustomer,
   archiveCustomer, unarchiveCustomer, deleteCustomer,
   getAllInventory, getProductByArticleId, addProduct, updateProduct,

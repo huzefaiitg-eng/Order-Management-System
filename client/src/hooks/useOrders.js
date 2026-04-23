@@ -28,5 +28,5 @@ export function useOrders(filters = {}) {
     );
   };
 
-  return { orders, loading, error, refresh: load, updateStatus };
+  return { orders, setOrders, loading, error, refresh: load, updateStatus };
 }

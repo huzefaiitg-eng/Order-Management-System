@@ -9,7 +9,7 @@ import InsightSection from '../components/InsightSection';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 import { formatCurrency, ORDER_SOURCES, ORDER_STATUSES, PAYMENT_MODES } from '../utils/formatters';
-import { fetchCustomers, fetchInventory, addOrder, addCustomer, addProduct } from '../services/api';
+import { fetchCustomers, fetchInventory, addOrder, addCustomer, addProduct, deleteOrder } from '../services/api';
 import { useCategories } from '../hooks/useCategories';
 import { useAuth } from '../context/AuthContext';
 import BillModal from '../components/BillModal';
@@ -18,7 +18,7 @@ import SearchableDropdown from '../components/SearchableDropdown';
 const BATCH_SIZE = 25;
 
 /* ─── CardActionMenu (mobile ⋮ menu) ─── */
-function CardActionMenu({ order, onStatusChange, onGenerateBill }) {
+function CardActionMenu({ order, onStatusChange, onGenerateBill, onDelete }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
@@ -44,6 +44,10 @@ function CardActionMenu({ order, onStatusChange, onGenerateBill }) {
           <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateBill(order); setOpen(false); }}
             className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2">
             <FileText size={14} /> Generate Bill
+          </button>
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(false); onDelete(order); }}
+            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+            <Trash2 size={14} /> Delete Order
           </button>
           <div className="border-t border-gray-100 my-1" />
           <p className="px-3 py-1 text-xs text-gray-400 font-medium">Change Status</p>
@@ -371,7 +375,7 @@ export default function Orders() {
 
   const [filters, setFilters] = useState({});
   const [search, setSearch] = useState('');
-  const { orders, loading, error, refresh, updateStatus } = useOrders(filters);
+  const { orders, loading, error, refresh, updateStatus, setOrders } = useOrders(filters);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addOrderPrefill, setAddOrderPrefill] = useState(null);
 
@@ -397,6 +401,17 @@ export default function Orders() {
   const [sortField, setSortField] = useState('orderDate');
   const [sortDir, setSortDir] = useState('desc');
   const [billOrder, setBillOrder] = useState(null);
+
+  const handleDelete = async (order) => {
+    const label = `${order.customerName} — ${order.productLines?.[0]?.productName || order.productOrdered} (${order.orderDate})`;
+    if (!window.confirm(`Delete this order?\n\n${label}\n\nThis permanently removes the row from the sheet and cannot be undone.`)) return;
+    try {
+      await deleteOrder(order.rowIndex);
+      setOrders(prev => prev.filter(o => o.rowIndex !== order.rowIndex));
+    } catch (err) {
+      alert('Failed to delete order: ' + err.message);
+    }
+  };
 
   // Filter flap state
   const [filterOpen, setFilterOpen] = useState(false);
@@ -738,6 +753,7 @@ export default function Orders() {
                         <div className="flex items-center gap-2">
                           <Link to={`/orders/${order.rowIndex}`} className="text-terracotta-600 hover:text-terracotta-800"><Eye size={16} /></Link>
                           <button onClick={() => setBillOrder(order)} className="text-gray-400 hover:text-terracotta-600" title="Generate Bill"><FileText size={16} /></button>
+                          <button onClick={() => handleDelete(order)} className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded p-0.5 transition-colors" title="Delete order"><Trash2 size={15} /></button>
                         </div>
                       </td>
                     </tr>
@@ -785,7 +801,7 @@ export default function Orders() {
                 </Link>
                 {/* ⋮ Action menu */}
                 <div className="absolute top-3 right-3">
-                  <CardActionMenu order={order} onStatusChange={(s) => updateStatus(order.rowIndex, s)} onGenerateBill={setBillOrder} />
+                  <CardActionMenu order={order} onStatusChange={(s) => updateStatus(order.rowIndex, s)} onGenerateBill={setBillOrder} onDelete={handleDelete} />
                 </div>
               </div>
             ))}

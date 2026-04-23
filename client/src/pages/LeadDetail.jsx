@@ -3,9 +3,13 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   Pencil, X, Check, Trash2, Phone, Mail,
   Package, IndianRupee, CalendarClock, Target,
-  AlertCircle, ExternalLink, ShoppingBag,
+  AlertCircle, ExternalLink, ShoppingBag, Plus,
+  CheckCircle2, Clock, Archive,
 } from 'lucide-react';
-import { fetchLeadById, updateLead, deleteLead, fetchInventory } from '../services/api';
+import {
+  fetchLeadById, updateLead, deleteLead, archiveLead, fetchInventory,
+  addLeadFollowUp, markLeadFollowUpDone,
+} from '../services/api';
 import { StatusBadge, LEAD_STATUSES, STATUS_CONFIG } from './Leads';
 import SearchableDropdown from '../components/SearchableDropdown';
 import DetailOverlay from '../components/DetailOverlay';
@@ -23,19 +27,255 @@ function formatBudget(v) {
   return `₹${Number(v).toLocaleString('en-IN')}`;
 }
 
-function isFollowUpOverdue(followUpDate) {
-  if (!followUpDate) return false;
-  const parts = followUpDate.split('/');
+function isFollowUpOverdue(dateStr) {
+  if (!dateStr) return false;
+  const parts = dateStr.split('/');
   if (parts.length !== 3) return false;
   const d = new Date(parts[2], parts[1] - 1, parts[0]);
   return d < new Date(new Date().setHours(0, 0, 0, 0));
 }
+
+function todayStr() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
+/** Sort follow-ups: pending first (by date asc), then done (by date desc). */
+function sortFollowUps(fus) {
+  const pending = fus.filter(f => f.happened !== 'Yes').sort((a, b) => {
+    const da = parseFuDate(a.scheduledDate);
+    const db = parseFuDate(b.scheduledDate);
+    if (!da && !db) return 0; if (!da) return 1; if (!db) return -1;
+    return da - db;
+  });
+  const done = fus.filter(f => f.happened === 'Yes').sort((a, b) => {
+    const da = parseFuDate(a.scheduledDate);
+    const db = parseFuDate(b.scheduledDate);
+    if (!da && !db) return 0; if (!da) return 1; if (!db) return -1;
+    return db - da; // newest done first
+  });
+  return [...pending, ...done];
+}
+
+function parseFuDate(str) {
+  if (!str) return null;
+  const parts = str.split('/');
+  if (parts.length !== 3) return null;
+  const [dd, mm, yyyy] = parts.map(Number);
+  if (!dd || !mm || !yyyy) return null;
+  const d = new Date(yyyy, mm - 1, dd);
+  d.setHours(0, 0, 0, 0);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// ── FollowUpSection ──────────────────────────────────────────────
+
+function FollowUpSection({ leadId, followUps, onFollowUpsChange, disabled }) {
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState('');       // YYYY-MM-DD (HTML date input)
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+
+  const [expandedId, setExpandedId] = useState(null);         // followUpId open for "mark done"
+  const [remarksText, setRemarksText] = useState('');
+  const [savingDone, setSavingDone] = useState(false);
+
+  const sorted = sortFollowUps(followUps);
+
+  async function handleSchedule() {
+    if (!scheduleDate) { setScheduleError('Please pick a date.'); return; }
+    const [y, m, d] = scheduleDate.split('-');
+    const ddmmyyyy = `${d}/${m}/${y}`;
+    setSavingSchedule(true);
+    setScheduleError('');
+    try {
+      const newFu = await addLeadFollowUp(leadId, { scheduledDate: ddmmyyyy });
+      onFollowUpsChange(sortFollowUps([...followUps, newFu]));
+      setScheduling(false);
+      setScheduleDate('');
+    } catch (err) {
+      setScheduleError(err.message);
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
+
+  async function handleMarkDone(followUpId) {
+    setSavingDone(true);
+    try {
+      const updated = await markLeadFollowUpDone(leadId, followUpId, { remarks: remarksText });
+      onFollowUpsChange(sortFollowUps(followUps.map(f => f.followUpId === followUpId ? updated : f)));
+      setExpandedId(null);
+      setRemarksText('');
+    } catch (err) {
+      alert('Failed to mark follow-up done: ' + err.message);
+    } finally {
+      setSavingDone(false);
+    }
+  }
+
+  function openMarkDone(id) {
+    if (expandedId === id) { setExpandedId(null); setRemarksText(''); return; }
+    setExpandedId(id);
+    setRemarksText('');
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <CalendarClock size={16} className="text-amber-600" />
+          <h3 className="text-sm font-semibold text-gray-900">Follow-ups</h3>
+          {followUps.length > 0 && (
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full font-medium">
+              {followUps.length}
+            </span>
+          )}
+        </div>
+        {!disabled && (
+          <button
+            onClick={() => { setScheduling(s => !s); setScheduleError(''); setScheduleDate(''); }}
+            className="flex items-center gap-1.5 text-xs font-medium text-terracotta-600 hover:text-terracotta-700 border border-terracotta-200 bg-terracotta-50 px-2.5 py-1.5 rounded-lg hover:bg-terracotta-100 transition-colors"
+          >
+            <Plus size={13} />
+            Schedule Follow-up
+          </button>
+        )}
+      </div>
+
+      {/* Schedule panel */}
+      {scheduling && (
+        <div className="px-5 py-4 border-b border-amber-100 bg-amber-50/40">
+          <p className="text-xs font-medium text-gray-700 mb-2">Pick a date for the follow-up:</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="date"
+              value={scheduleDate}
+              min={new Date().toISOString().split('T')[0]}
+              onChange={e => { setScheduleDate(e.target.value); setScheduleError(''); }}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500"
+            />
+            <button
+              onClick={handleSchedule}
+              disabled={savingSchedule}
+              className="px-3 py-1.5 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50 font-medium"
+            >
+              {savingSchedule ? 'Saving…' : 'Confirm'}
+            </button>
+            <button
+              onClick={() => { setScheduling(false); setScheduleDate(''); setScheduleError(''); }}
+              className="px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+          {scheduleError && (
+            <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
+              <AlertCircle size={12} /> {scheduleError}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* List */}
+      {sorted.length === 0 ? (
+        <div className="px-5 py-6 text-center text-sm text-gray-400">
+          <CalendarClock size={24} className="mx-auto mb-2 text-gray-200" />
+          No follow-ups yet.{!disabled && ' Click "Schedule Follow-up" to add one.'}
+        </div>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {sorted.map(fu => {
+            const isDone = fu.happened === 'Yes';
+            const isOverdue = !isDone && isFollowUpOverdue(fu.scheduledDate);
+            const isToday = !isDone && fu.scheduledDate === todayStr();
+            const isExpanded = expandedId === fu.followUpId;
+
+            return (
+              <div key={fu.followUpId} className="px-5 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-3 min-w-0">
+                    {/* Status icon */}
+                    {isDone ? (
+                      <CheckCircle2 size={16} className="text-green-500 mt-0.5 shrink-0" />
+                    ) : (
+                      <Clock size={16} className={`mt-0.5 shrink-0 ${isOverdue ? 'text-red-500' : isToday ? 'text-amber-500' : 'text-gray-400'}`} />
+                    )}
+                    <div className="min-w-0">
+                      <span className={`text-sm font-medium ${
+                        isDone ? 'text-gray-400 line-through' :
+                        isOverdue ? 'text-red-600' :
+                        isToday  ? 'text-amber-700' :
+                        'text-gray-800'
+                      }`}>
+                        {fu.scheduledDate}
+                        {isOverdue && <span className="ml-1.5 text-xs font-normal text-red-500">(overdue)</span>}
+                        {isToday   && <span className="ml-1.5 text-xs font-normal text-amber-600">(today)</span>}
+                      </span>
+                      {isDone && (
+                        <span className="ml-2 text-xs font-medium text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">
+                          Done
+                        </span>
+                      )}
+                      {fu.remarks && (
+                        <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{fu.remarks}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action */}
+                  {!isDone && !disabled && (
+                    <button
+                      onClick={() => openMarkDone(fu.followUpId)}
+                      className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${
+                        isExpanded
+                          ? 'bg-gray-100 border-gray-200 text-gray-600'
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {isExpanded ? 'Cancel' : 'Mark as Done'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Mark done panel */}
+                {isExpanded && !isDone && (
+                  <div className="mt-2 ml-7 space-y-2">
+                    <textarea
+                      rows={2}
+                      value={remarksText}
+                      onChange={e => setRemarksText(e.target.value)}
+                      placeholder="Remarks (optional) — what happened in this follow-up?"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 resize-none"
+                    />
+                    <button
+                      onClick={() => handleMarkDone(fu.followUpId)}
+                      disabled={savingDone}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium"
+                    >
+                      <CheckCircle2 size={14} />
+                      {savingDone ? 'Saving…' : 'Confirm — Mark Done'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── LeadDetail ────────────────────────────────────────────────────
 
 export default function LeadDetail() {
   const { leadId } = useParams();
   const navigate = useNavigate();
 
   const [lead, setLead] = useState(null);
+  const [followUps, setFollowUps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -52,7 +292,10 @@ export default function LeadDetail() {
   useEffect(() => {
     setLoading(true);
     fetchLeadById(leadId)
-      .then(setLead)
+      .then(data => {
+        setLead(data);
+        setFollowUps(sortFollowUps(data.followUps || []));
+      })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, [leadId]);
@@ -71,7 +314,6 @@ export default function LeadDetail() {
       selectedProducts: parseProducts(lead.productsInterested).map(name => ({ productName: name, articleId: name })),
       leadStatus: lead.leadStatus,
       leadSource: lead.leadSource || '',
-      followUpDate: lead.followUpDate || '',
       budget: lead.budget || '',
       notes: lead.notes || '',
     });
@@ -99,11 +341,10 @@ export default function LeadDetail() {
         productsInterested: editForm.selectedProducts.map(p => p.productName).join(','),
         leadStatus: editForm.leadStatus,
         leadSource: editForm.leadSource,
-        followUpDate: editForm.followUpDate,
         budget: editForm.budget ? parseFloat(editForm.budget) : 0,
         notes: editForm.notes,
       };
-      const updated = await updateLead(leadId, updates);
+      await updateLead(leadId, updates);
       setLead(prev => ({ ...prev, ...updates }));
       setEditing(false);
     } catch (err) {
@@ -136,8 +377,17 @@ export default function LeadDetail() {
     }
   }
 
+  async function handleArchive() {
+    if (!window.confirm('Archive this lead? You can restore it from the Archived Leads page.')) return;
+    try {
+      await archiveLead(leadId);
+      navigate('/leads?tab=list');
+    } catch (err) {
+      alert('Failed to archive lead: ' + err.message);
+    }
+  }
+
   function handleCreateOrder() {
-    // Store prefill data for the Orders page AddOrderModal
     sessionStorage.setItem('lead_order_prefill', JSON.stringify({
       customerName: lead.customerName,
       customerPhone: lead.customerPhone,
@@ -160,6 +410,10 @@ export default function LeadDetail() {
   const cfg = STATUS_CONFIG[lead.leadStatus] || STATUS_CONFIG['New Lead'];
   const productList = parseProducts(lead.productsInterested);
 
+  // Next pending follow-up
+  const nextPendingFu = followUps.find(f => f.happened !== 'Yes');
+  const isDisabled = lead.leadStatus === 'Converted' || lead.leadStatus === 'Lost';
+
   return (
     <DetailOverlay fallback="/leads?tab=list" title={lead.customerName}>
     <div className="px-4 sm:px-6 py-6 space-y-6 max-w-4xl mx-auto">
@@ -169,7 +423,6 @@ export default function LeadDetail() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           {/* Left: customer info */}
           <div className="flex items-start gap-4 min-w-0">
-            {/* Avatar */}
             <div className="w-12 h-12 rounded-full bg-terracotta-100 text-terracotta-700 font-bold text-lg flex items-center justify-center shrink-0">
               {lead.customerName?.[0]?.toUpperCase() || '?'}
             </div>
@@ -241,6 +494,13 @@ export default function LeadDetail() {
                   Edit
                 </button>
                 <button
+                  onClick={handleArchive}
+                  className="p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors"
+                  title="Archive lead"
+                >
+                  <Archive size={18} />
+                </button>
+                <button
                   onClick={handleDelete}
                   className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                   title="Delete lead"
@@ -310,35 +570,22 @@ export default function LeadDetail() {
           )}
         </div>
 
+        {/* Next Follow-up (read-only — scheduling happens in FollowUpSection) */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 text-gray-500 mb-1">
             <CalendarClock size={14} />
-            <span className="text-xs font-medium">Follow-up</span>
+            <span className="text-xs font-medium">Next Follow-up</span>
           </div>
-          {editing ? (
-            <input
-              type="date"
-              defaultValue={
-                editForm.followUpDate
-                  ? (() => { const p = editForm.followUpDate.split('/'); return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : ''; })()
-                  : ''
-              }
-              onChange={e => {
-                const v = e.target.value;
-                if (!v) { setEditForm(f => ({ ...f, followUpDate: '' })); return; }
-                const [y, m, d] = v.split('-');
-                setEditForm(f => ({ ...f, followUpDate: `${d}/${m}/${y}` }));
-              }}
-              className="text-sm border-b border-gray-300 focus:outline-none focus:border-terracotta-500 w-full"
-            />
-          ) : (
+          {nextPendingFu ? (
             <p className={`text-lg font-bold ${
-              lead.followUpDate
-                ? isFollowUpOverdue(lead.followUpDate) ? 'text-red-600' : 'text-gray-900'
-                : 'text-gray-300'
+              isFollowUpOverdue(nextPendingFu.scheduledDate) ? 'text-red-600' :
+              nextPendingFu.scheduledDate === todayStr() ? 'text-amber-600' :
+              'text-gray-900'
             }`}>
-              {lead.followUpDate || '—'}
+              {nextPendingFu.scheduledDate}
             </p>
+          ) : (
+            <p className="text-sm text-gray-300 mt-1">—</p>
           )}
         </div>
 
@@ -420,6 +667,14 @@ export default function LeadDetail() {
           )}
         </div>
       </div>
+
+      {/* ── Follow-up Section ── */}
+      <FollowUpSection
+        leadId={lead.leadId}
+        followUps={followUps}
+        onFollowUpsChange={setFollowUps}
+        disabled={isDisabled}
+      />
 
       {/* Conversion section */}
       {lead.leadStatus === 'Converted' && (

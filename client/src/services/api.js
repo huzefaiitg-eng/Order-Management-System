@@ -103,6 +103,10 @@ export function fetchOrderAudit(rowIndex) {
   return request(`/orders/${rowIndex}/audit`);
 }
 
+export function deleteOrder(rowIndex) {
+  return request(`/orders/${rowIndex}`, { method: 'DELETE' });
+}
+
 // Dashboard & Insights
 // Returns { orders, customerKpis, inventoryKpis }. Filtering is now client-side.
 export function fetchDashboard() {
@@ -239,6 +243,32 @@ export function updateLead(leadId, updates) {
 
 export function deleteLead(leadId) {
   return request(`/leads/${encodeURIComponent(leadId)}`, { method: 'DELETE' });
+}
+
+export function fetchArchivedLeads() {
+  return request('/leads/archived');
+}
+
+export function archiveLead(leadId) {
+  return request(`/leads/${encodeURIComponent(leadId)}/archive`, { method: 'PATCH' });
+}
+
+export function unarchiveLead(leadId) {
+  return request(`/leads/${encodeURIComponent(leadId)}/unarchive`, { method: 'PATCH' });
+}
+
+export function addLeadFollowUp(leadId, { scheduledDate }) {
+  return request(`/leads/${encodeURIComponent(leadId)}/followups`, {
+    method: 'POST',
+    body: JSON.stringify({ scheduledDate }),
+  });
+}
+
+export function markLeadFollowUpDone(leadId, followUpId, { remarks }) {
+  return request(`/leads/${encodeURIComponent(leadId)}/followups/${encodeURIComponent(followUpId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ happened: 'Yes', remarks }),
+  });
 }
 
 // Upload

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { resolveTimeRange, parseOrderDate } from '../utils/dashboardAggregations';
 
-const LEAD_STATUSES = ['New Lead', 'Contacted', 'Interested', 'Follow-up', 'Converted', 'Lost'];
+const LEAD_STATUSES = ['New Lead', 'Contacted', 'Interested', 'Converted', 'Lost'];
 
 /** Parse a DD/MM/YYYY string into a midnight Date. Returns null on bad input. */
 function parseLeadDate(str) {
@@ -46,6 +46,7 @@ function parseProducts(str) {
  *
  * Pure memoised analytics over the leads array.
  * timeRange = { start: Date|null, end: Date|null }  — from resolveTimeRange()
+ * Each lead may carry a `nextFollowUp: { followUpId, date } | null` field from GET /api/leads.
  */
 export function useLeadInsights(leads = [], timeRange = { start: null, end: null }) {
   return useMemo(() => {
@@ -88,30 +89,32 @@ export function useLeadInsights(leads = [], timeRange = { start: null, end: null
     const estimatedRevenue = Math.round(totalPipelineValue * (conversionRate / 100));
 
     // ── CLASSIFICATION ────────────────────────────────────────────────────────
-    // HOT: Active + (Follow-up | Interested) + followUpDate is today or overdue
-    // WARM: Active + has a future followUpDate (next 1–14 days) OR status = Interested/Follow-up without overdue
-    // COLD: Active + status = New Lead | Contacted + no followUpDate + leadAge > 30 days
+    // Uses lead.nextFollowUp?.date (earliest pending follow-up, from GET /api/leads)
+    //
+    // HOT: Active + Interested + nextFollowUp date is today or overdue
+    // WARM: Active + has a future nextFollowUp (next 1–14 days) OR status = Interested without overdue
+    // COLD: Active + New Lead | Contacted + no nextFollowUp + leadAge > 30 days
     // Everything else = Warm
 
-    const in30Days = new Date(todayMidnight);
-    in30Days.setDate(in30Days.getDate() + 14);
+    const in14Days = new Date(todayMidnight);
+    in14Days.setDate(in14Days.getDate() + 14);
 
     const hotLeads = [];
     const warmLeads = [];
     const coldLeads = [];
 
     activeLeads.forEach(lead => {
-      const followUpD = parseLeadDate(lead.followUpDate);
+      const nextFuDate = parseLeadDate(lead.nextFollowUp?.date);
       const leadD = parseLeadDate(lead.leadDate);
       const leadAgeMs = leadD ? todayMidnight - leadD : 0;
       const leadAgeDays = Math.floor(leadAgeMs / (1000 * 60 * 60 * 24));
 
-      const isEngaged = lead.leadStatus === 'Follow-up' || lead.leadStatus === 'Interested';
-      const isFollowUpTodayOrOverdue = followUpD && followUpD <= todayMidnight;
-      const hasFutureFollowUp = followUpD && followUpD > todayMidnight && followUpD <= in30Days;
+      const isEngaged = lead.leadStatus === 'Interested';
+      const isFollowUpTodayOrOverdue = nextFuDate && nextFuDate <= todayMidnight;
+      const hasFutureFollowUp = nextFuDate && nextFuDate > todayMidnight && nextFuDate <= in14Days;
       const isColdCandidate =
         (lead.leadStatus === 'New Lead' || lead.leadStatus === 'Contacted') &&
-        !followUpD &&
+        !nextFuDate &&
         leadAgeDays > 30;
 
       if (isEngaged && isFollowUpTodayOrOverdue) {
@@ -129,20 +132,21 @@ export function useLeadInsights(leads = [], timeRange = { start: null, end: null
     const hotLeadRevenuePotential = hotLeads.reduce((sum, l) => sum + (l.budget || 0), 0);
 
     // ── FOLLOW-UP BUCKETS ─────────────────────────────────────────────────────
+    // Use lead.nextFollowUp?.date (earliest pending follow-up per lead)
     const tomorrow = new Date(todayMidnight);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const in5Days = new Date(todayMidnight);
     in5Days.setDate(in5Days.getDate() + 5);
 
     const overdueFollowUps = activeLeads.filter(l => {
-      const d = parseLeadDate(l.followUpDate);
+      const d = parseLeadDate(l.nextFollowUp?.date);
       return d && d < todayMidnight;
     });
 
-    const followUpsTodayList = activeLeads.filter(l => l.followUpDate === todayStr);
+    const followUpsTodayList = activeLeads.filter(l => l.nextFollowUp?.date === todayStr);
 
     const followUpsNext5Days = activeLeads.filter(l => {
-      const d = parseLeadDate(l.followUpDate);
+      const d = parseLeadDate(l.nextFollowUp?.date);
       return d && d >= tomorrow && d <= in5Days;
     });
 
@@ -213,7 +217,7 @@ export function useLeadInsights(leads = [], timeRange = { start: null, end: null
       overdueFollowUps,
       followUpsTodayList,
       followUpsNext5Days,
-      followUpsDueToday, // legacy
+      followUpsDueToday, // legacy alias
 
       // Product demand
       topProducts,

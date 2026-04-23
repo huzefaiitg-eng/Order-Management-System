@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getAllOrders, updateOrderStatus, updatePaymentStatus, addOrder, getOrderStatus, addAuditEntry, getAuditHistory, getAllCustomers, getAllInventory, adjustStock, getOrderByRowIndex, getCustomerByPhone, addCustomer } = require('../services/sheets');
+const { getAllOrders, updateOrderStatus, updatePaymentStatus, addOrder, getOrderStatus, deleteOrder, addAuditEntry, getAuditHistory, getAllCustomers, getAllInventory, adjustStock, getOrderByRowIndex, getCustomerByPhone, addCustomer } = require('../services/sheets');
 
 const VALID_STATUSES = [
   'Pending', 'Confirmed', 'Packed', 'Shipped',
@@ -251,6 +251,22 @@ router.patch('/:rowIndex/payment', async (req, res) => {
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Error updating payment status:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /api/orders/:rowIndex
+router.delete('/:rowIndex', async (req, res) => {
+  try {
+    const { sheetId } = req.user;
+    const rowIndex = parseInt(req.params.rowIndex);
+    if (!rowIndex || rowIndex < 2) {
+      return res.status(400).json({ success: false, error: 'Invalid row index' });
+    }
+    const result = await deleteOrder(sheetId, rowIndex);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error deleting order:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });

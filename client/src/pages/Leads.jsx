@@ -4,14 +4,14 @@ import {
   Target, TrendingUp, DollarSign, CalendarClock,
   Plus, LayoutList, Columns3, Search, X, SlidersHorizontal,
   Phone, Package, AlertCircle, RefreshCw, Lightbulb,
-  Flame, Zap, Snowflake, ArrowRight, TrendingDown, ArrowUpRight,
+  Flame, Zap, Snowflake, ArrowRight, TrendingDown, ArrowUpRight, Archive,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 import { useLeads } from '../hooks/useLeads';
 import { useLeadInsights } from '../hooks/useLeadInsights';
-import { addLead, updateLead, deleteLead, fetchInventory, fetchCustomers, addCustomer } from '../services/api';
+import { addLead, updateLead, deleteLead, archiveLead, fetchInventory, fetchCustomers, addCustomer } from '../services/api';
 import { resolveTimeRange } from '../utils/dashboardAggregations';
 import KpiCard from '../components/KpiCard';
 import InsightSection from '../components/InsightSection';
@@ -21,14 +21,13 @@ import Loader from '../components/Loader';
 
 // ── Constants ─────────────────────────────────────────────────
 
-export const LEAD_STATUSES = ['New Lead', 'Contacted', 'Interested', 'Follow-up', 'Converted', 'Lost'];
+export const LEAD_STATUSES = ['New Lead', 'Contacted', 'Interested', 'Converted', 'Lost'];
 const LEAD_SOURCES = ['WhatsApp', 'Instagram', 'Facebook', 'Referral', 'Walk-in/Offline'];
 
 export const STATUS_CONFIG = {
   'New Lead':   { bg: 'bg-slate-100',  text: 'text-slate-700',  border: 'border-slate-200',  color: '#94A3B8', dot: 'bg-slate-400' },
   'Contacted':  { bg: 'bg-blue-100',   text: 'text-blue-700',   border: 'border-blue-200',   color: '#3B82F6', dot: 'bg-blue-400' },
   'Interested': { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-200', color: '#6366F1', dot: 'bg-indigo-400' },
-  'Follow-up':  { bg: 'bg-amber-100',  text: 'text-amber-700',  border: 'border-amber-200',  color: '#F59E0B', dot: 'bg-amber-400' },
   'Converted':  { bg: 'bg-green-100',  text: 'text-green-700',  border: 'border-green-200',  color: '#22C55E', dot: 'bg-green-500' },
   'Lost':       { bg: 'bg-red-100',    text: 'text-red-700',    border: 'border-red-200',    color: '#EF4444', dot: 'bg-red-400' },
 };
@@ -73,7 +72,7 @@ function isFollowUpOverdue(followUpDate) {
 const EMPTY_FORM = {
   customerName: '', customerPhone: '', customerEmail: '',
   selectedProducts: [], leadStatus: 'New Lead', leadSource: '',
-  followUpDate: '', budget: '', notes: '',
+  budget: '', notes: '',
 };
 
 const EMPTY_NEW_CUSTOMER = { customerName: '', customerPhone: '', customerAddress: '', customerEmail: '' };
@@ -146,7 +145,6 @@ function AddLeadModal({ onClose, onSaved }) {
         productsInterested: form.selectedProducts.map(p => p.productName).join(','),
         leadStatus: form.leadStatus,
         leadSource: form.leadSource,
-        followUpDate: form.followUpDate,
         budget: form.budget ? parseFloat(form.budget) : 0,
         notes: form.notes,
       });
@@ -287,31 +285,16 @@ function AddLeadModal({ onClose, onSaved }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Follow-up Date</label>
-              <input
-                type="date"
-                onChange={e => {
-                  const v = e.target.value;
-                  if (!v) { set('followUpDate', ''); return; }
-                  const [y, m, d] = v.split('-');
-                  set('followUpDate', `${d}/${m}/${y}`);
-                }}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Budget ₹</label>
-              <input
-                type="number"
-                min="0"
-                value={form.budget}
-                onChange={e => set('budget', e.target.value)}
-                className={inputClass}
-                placeholder="0"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Budget ₹</label>
+            <input
+              type="number"
+              min="0"
+              value={form.budget}
+              onChange={e => set('budget', e.target.value)}
+              className={inputClass}
+              placeholder="0"
+            />
           </div>
 
           <div>
@@ -353,7 +336,7 @@ function AddLeadModal({ onClose, onSaved }) {
 
 // ── Kanban Board ──────────────────────────────────────────────
 
-function KanbanBoard({ leads, onStatusChange, onDelete }) {
+function KanbanBoard({ leads, onStatusChange, onDelete, onArchive }) {
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
 
@@ -426,13 +409,22 @@ function KanbanBoard({ leads, onStatusChange, onDelete }) {
                 >
                   <div className="flex items-start justify-between gap-1 mb-1.5">
                     <p className="text-sm font-medium text-gray-900 leading-snug truncate">{lead.customerName}</p>
-                    <Link
-                      to={`/leads/${lead.leadId}`}
-                      onClick={e => e.stopPropagation()}
-                      className="text-[10px] text-terracotta-600 hover:underline shrink-0"
-                    >
-                      View
-                    </Link>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Link
+                        to={`/leads/${lead.leadId}`}
+                        onClick={e => e.stopPropagation()}
+                        className="text-[10px] text-terracotta-600 hover:underline"
+                      >
+                        View
+                      </Link>
+                      <button
+                        onClick={e => { e.stopPropagation(); onArchive(lead.leadId); }}
+                        className="p-0.5 text-gray-300 hover:text-amber-500 rounded transition-colors"
+                        title="Archive"
+                      >
+                        <Archive size={11} />
+                      </button>
+                    </div>
                   </div>
 
                   {parseProducts(lead.productsInterested).length > 0 && (
@@ -450,15 +442,15 @@ function KanbanBoard({ leads, onStatusChange, onDelete }) {
                     {lead.leadSource && (
                       <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{lead.leadSource}</span>
                     )}
-                    {lead.followUpDate && (
+                    {lead.nextFollowUp?.date && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                        isFollowUpOverdue(lead.followUpDate)
+                        isFollowUpOverdue(lead.nextFollowUp.date)
                           ? 'bg-red-50 text-red-600 font-medium'
-                          : lead.followUpDate === todayStr()
+                          : lead.nextFollowUp.date === todayStr()
                           ? 'bg-amber-50 text-amber-600 font-medium'
                           : 'bg-gray-100 text-gray-500'
                       }`}>
-                        📅 {lead.followUpDate}
+                        📅 {lead.nextFollowUp.date}
                       </span>
                     )}
                     {lead.budget > 0 && (
@@ -483,7 +475,7 @@ function KanbanBoard({ leads, onStatusChange, onDelete }) {
 
 // ── Lead Table ────────────────────────────────────────────────
 
-function LeadTable({ leads, onStatusChange, onDelete }) {
+function LeadTable({ leads, onStatusChange, onDelete, onArchive }) {
   const [sortBy, setSortBy] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
   const [visibleCount, setVisibleCount] = useState(25);
@@ -499,7 +491,7 @@ function LeadTable({ leads, onStatusChange, onDelete }) {
     let cmp = 0;
     if (sortBy === 'date') cmp = parseDate(a.leadDate) - parseDate(b.leadDate);
     else if (sortBy === 'budget') cmp = (a.budget || 0) - (b.budget || 0);
-    else if (sortBy === 'followUp') cmp = parseDate(a.followUpDate) - parseDate(b.followUpDate);
+    else if (sortBy === 'followUp') cmp = parseDate(a.nextFollowUp?.date) - parseDate(b.nextFollowUp?.date);
     else if (sortBy === 'name') cmp = a.customerName.localeCompare(b.customerName);
     return sortDir === 'asc' ? cmp : -cmp;
   });
@@ -535,12 +527,16 @@ function LeadTable({ leads, onStatusChange, onDelete }) {
                   Customer <SortIndicator col="name" />
                 </button>
               </th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Products</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <button onClick={() => toggleSort('date')} className="hover:text-gray-700">
+                  Date Added <SortIndicator col="date" />
+                </button>
+              </th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Source</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Products</th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 <button onClick={() => toggleSort('followUp')} className="hover:text-gray-700">
-                  Follow-up <SortIndicator col="followUp" />
+                  Next Follow-up <SortIndicator col="followUp" />
                 </button>
               </th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -548,11 +544,7 @@ function LeadTable({ leads, onStatusChange, onDelete }) {
                   Budget <SortIndicator col="budget" />
                 </button>
               </th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <button onClick={() => toggleSort('date')} className="hover:text-gray-700">
-                  Added <SortIndicator col="date" />
-                </button>
-              </th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -563,6 +555,8 @@ function LeadTable({ leads, onStatusChange, onDelete }) {
                   <p className="font-medium text-gray-900 truncate max-w-[140px]">{lead.customerName}</p>
                   <p className="text-xs text-gray-400 font-mono">{lead.customerPhone}</p>
                 </td>
+                <td className="px-4 py-3 text-xs text-gray-400">{lead.leadDate}</td>
+                <td className="px-4 py-3 text-xs text-gray-600">{lead.leadSource || '—'}</td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
                     {parseProducts(lead.productsInterested).slice(0, 2).map((p, i) => (
@@ -573,32 +567,39 @@ function LeadTable({ leads, onStatusChange, onDelete }) {
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-3"><StatusBadge status={lead.leadStatus} /></td>
-                <td className="px-4 py-3 text-xs text-gray-600">{lead.leadSource || '—'}</td>
                 <td className="px-4 py-3 text-xs">
-                  {lead.followUpDate ? (
+                  {lead.nextFollowUp?.date ? (
                     <span className={
-                      isFollowUpOverdue(lead.followUpDate)
+                      isFollowUpOverdue(lead.nextFollowUp.date)
                         ? 'text-red-600 font-medium'
-                        : lead.followUpDate === todayStr()
+                        : lead.nextFollowUp.date === todayStr()
                         ? 'text-amber-600 font-medium'
                         : 'text-gray-600'
                     }>
-                      {lead.followUpDate}
+                      {lead.nextFollowUp.date}
                     </span>
-                  ) : <span className="text-gray-300">—</span>}
+                  ) : <span className="text-gray-300 italic text-[11px]">No follow-up scheduled</span>}
                 </td>
                 <td className="px-4 py-3 text-right text-xs font-medium text-gray-700">
                   {lead.budget > 0 ? formatBudget(lead.budget) : <span className="text-gray-300">—</span>}
                 </td>
-                <td className="px-4 py-3 text-xs text-gray-400">{lead.leadDate}</td>
+                <td className="px-4 py-3"><StatusBadge status={lead.leadStatus} /></td>
                 <td className="px-4 py-3">
-                  <Link
-                    to={`/leads/${lead.leadId}`}
-                    className="text-xs text-terracotta-600 hover:text-terracotta-700 font-medium"
-                  >
-                    View →
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/leads/${lead.leadId}`}
+                      className="text-xs text-terracotta-600 hover:text-terracotta-700 font-medium"
+                    >
+                      View →
+                    </Link>
+                    <button
+                      onClick={() => onArchive(lead.leadId)}
+                      className="p-1 text-gray-300 hover:text-amber-500 hover:bg-amber-50 rounded transition-colors"
+                      title="Archive lead"
+                    >
+                      <Archive size={13} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -628,9 +629,9 @@ function LeadTable({ leads, onStatusChange, onDelete }) {
               <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
                 {lead.leadSource && <span>{lead.leadSource}</span>}
                 {lead.budget > 0 && <span className="text-green-700 font-medium">{formatBudget(lead.budget)}</span>}
-                {lead.followUpDate && (
-                  <span className={isFollowUpOverdue(lead.followUpDate) ? 'text-red-500 font-medium' : ''}>
-                    📅 {lead.followUpDate}
+                {lead.nextFollowUp?.date && (
+                  <span className={isFollowUpOverdue(lead.nextFollowUp.date) ? 'text-red-500 font-medium' : ''}>
+                    📅 {lead.nextFollowUp.date}
                   </span>
                 )}
               </div>
@@ -703,9 +704,9 @@ function FollowUpLeadCard({ lead, urgency }) {
             {formatBudget(lead.budget)}
           </span>
         )}
-        {lead.followUpDate && (
+        {lead.nextFollowUp?.date && (
           <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${dateColor}`}>
-            📅 {lead.followUpDate}
+            📅 {lead.nextFollowUp.date}
             {urgency === 'overdue' && ' (overdue)'}
           </span>
         )}
@@ -841,46 +842,48 @@ function InsightsTab({ leads }) {
 
       {/* ── Section 1: Combined Leads + Conversion with filter button ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-8">
-            <div>
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-0.5">Total Leads</p>
-              <p className="text-3xl font-bold text-gray-900">{filteredLeadCount}</p>
-              {filteredConvertedCount > 0 && (
-                <p className="text-xs text-gray-400 mt-0.5">{filteredConvertedCount} converted</p>
-              )}
-            </div>
-            <div className="h-12 w-px bg-gray-100" />
-            <div>
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-0.5">Conversion Rate</p>
-              <p className="text-3xl font-bold text-green-600">{filteredConversionRate}%</p>
-              <p className="text-xs text-gray-400 mt-0.5">Leads → Orders</p>
-            </div>
-          </div>
-
-          {/* Filter button */}
-          <div className="flex flex-col items-end gap-2 shrink-0">
+        {/* Card header — title left, filter button right */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-900">Lead Overview</h3>
+          <div className="flex items-center gap-2">
+            {isTimeFiltered && (
+              <button
+                onClick={() => { setTimePreset('all'); setCustomRange({ startDate: '', endDate: '' }); }}
+                className="flex items-center gap-1 text-xs text-terracotta-600 hover:text-terracotta-700 font-medium"
+              >
+                <X size={11} /> Clear
+              </button>
+            )}
             <button
               onClick={() => setTimeFilterOpen(true)}
-              className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg border font-medium transition-colors ${
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border font-medium transition-colors ${
                 isTimeFiltered
                   ? 'bg-terracotta-50 border-terracotta-300 text-terracotta-700'
                   : 'border-gray-300 text-gray-600 hover:bg-gray-50'
               }`}
             >
-              <SlidersHorizontal size={15} />
+              <SlidersHorizontal size={14} />
               <span className="hidden sm:inline">
                 {isTimeFiltered ? TIME_LABELS[timePreset] || 'Custom' : 'All Time'}
               </span>
             </button>
-            {isTimeFiltered && (
-              <button
-                onClick={() => { setTimePreset('all'); setCustomRange({ startDate: '', endDate: '' }); }}
-                className="flex items-center gap-1 text-xs text-terracotta-600 hover:text-terracotta-700"
-              >
-                <X size={11} /> Clear filter
-              </button>
+          </div>
+        </div>
+
+        {/* KPI numbers */}
+        <div className="flex items-center gap-8">
+          <div>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-0.5">Total Leads</p>
+            <p className="text-3xl font-bold text-gray-900">{filteredLeadCount}</p>
+            {filteredConvertedCount > 0 && (
+              <p className="text-xs text-gray-400 mt-0.5">{filteredConvertedCount} converted</p>
             )}
+          </div>
+          <div className="h-12 w-px bg-gray-100" />
+          <div>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-0.5">Conversion Rate</p>
+            <p className="text-3xl font-bold text-green-600">{filteredConversionRate}%</p>
+            <p className="text-xs text-gray-400 mt-0.5">Leads → Orders</p>
           </div>
         </div>
       </div>
@@ -1188,15 +1191,15 @@ function classifyLeadAs(lead) {
     return isNaN(d.getTime()) ? null : d;
   }
 
-  const followUpD = pd(lead.followUpDate);
+  const nextFuDate = pd(lead.nextFollowUp?.date);
   const leadD = pd(lead.leadDate);
   const ageDays = leadD ? Math.floor((todayMidnight - leadD) / 86400000) : 0;
-  const isEngaged = lead.leadStatus === 'Follow-up' || lead.leadStatus === 'Interested';
-  const isHotFollowUp = followUpD && followUpD <= todayMidnight;
-  const hasFutureFollowUp = followUpD && followUpD >= tomorrow && followUpD <= in14Days;
+  const isEngaged = lead.leadStatus === 'Interested';
+  const isHotFollowUp = nextFuDate && nextFuDate <= todayMidnight;
+  const hasFutureFollowUp = nextFuDate && nextFuDate >= tomorrow && nextFuDate <= in14Days;
 
   if (isEngaged && isHotFollowUp) return 'hot';
-  const isCold = (lead.leadStatus === 'New Lead' || lead.leadStatus === 'Contacted') && !followUpD && ageDays > 30;
+  const isCold = (lead.leadStatus === 'New Lead' || lead.leadStatus === 'Contacted') && !nextFuDate && ageDays > 30;
   if (isCold) return 'cold';
   if (hasFutureFollowUp || isEngaged) return 'warm';
   return 'warm'; // default active
@@ -1315,6 +1318,17 @@ export default function Leads() {
     }
   }
 
+  async function handleArchive(leadId) {
+    if (!window.confirm('Archive this lead? You can restore it from the Archived Leads page.')) return;
+    try {
+      await archiveLead(leadId);
+      setLeads(prev => prev.filter(l => l.leadId !== leadId));
+    } catch (err) {
+      console.error('Archive failed:', err.message);
+      alert('Failed to archive lead: ' + err.message);
+    }
+  }
+
   const isFiltered = totalApplied > 0 || filterSearch.length > 0 || !!classFilter;
 
   return (
@@ -1331,13 +1345,22 @@ export default function Leads() {
             <RefreshCw size={18} />
           </button>
         </div>
-        <button
-          onClick={() => setAddModalOpen(true)}
-          className="flex items-center gap-2 px-3 py-2 bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 transition-colors text-sm font-medium"
-        >
-          <Plus size={16} />
-          <span className="hidden md:inline">Add Lead</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/leads/archived"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+          >
+            <Archive size={15} />
+            <span className="hidden md:inline">Archived</span>
+          </Link>
+          <button
+            onClick={() => setAddModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 transition-colors text-sm font-medium"
+          >
+            <Plus size={16} />
+            <span className="hidden md:inline">Add Lead</span>
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -1468,12 +1491,14 @@ export default function Leads() {
               leads={filteredLeads}
               onStatusChange={handleStatusChange}
               onDelete={handleDelete}
+              onArchive={handleArchive}
             />
           ) : (
             <LeadTable
               leads={filteredLeads}
               onStatusChange={handleStatusChange}
               onDelete={handleDelete}
+              onArchive={handleArchive}
             />
           )}
         </div>

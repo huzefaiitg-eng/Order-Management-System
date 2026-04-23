@@ -18,6 +18,7 @@ import SettingsPage from './pages/Settings';
 import LandingPage from './pages/LandingPage';
 import Leads from './pages/Leads';
 import LeadDetail from './pages/LeadDetail';
+import ArchivedLeads from './pages/ArchivedLeads';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -81,6 +82,7 @@ export default function App() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/leads" element={<Leads />} />
+                <Route path="/leads/archived" element={<ArchivedLeads />} />
                 <Route path="/leads/:leadId" element={<LeadDetail />} />
               </Route>
             </Route>
