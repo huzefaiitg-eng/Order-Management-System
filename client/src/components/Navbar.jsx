@@ -83,17 +83,6 @@ export default function Navbar() {
           {switcherOpen && (
             <div className="absolute left-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50">
               <button
-                onClick={() => { navigate('/dashboard'); setSwitcherOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left ${!isCRM ? 'bg-terracotta-50' : ''}`}
-              >
-                <span className="text-xl">📦</span>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Order Management</p>
-                  <p className="text-xs text-gray-400">Orders · Inventory</p>
-                </div>
-                {!isCRM && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-terracotta-500" />}
-              </button>
-              <button
                 onClick={() => { navigate('/leads'); setSwitcherOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left ${isCRM ? 'bg-terracotta-50' : ''}`}
               >
@@ -103,6 +92,17 @@ export default function Navbar() {
                   <p className="text-xs text-gray-400">Leads · Customers</p>
                 </div>
                 {isCRM && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-terracotta-500" />}
+              </button>
+              <button
+                onClick={() => { navigate('/dashboard'); setSwitcherOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left ${!isCRM ? 'bg-terracotta-50' : ''}`}
+              >
+                <span className="text-xl">📦</span>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Order Management</p>
+                  <p className="text-xs text-gray-400">Orders · Inventory</p>
+                </div>
+                {!isCRM && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-terracotta-500" />}
               </button>
             </div>
           )}
