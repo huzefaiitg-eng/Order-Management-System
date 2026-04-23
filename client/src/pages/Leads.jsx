@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Target, TrendingUp, DollarSign, CalendarClock,
   Plus, LayoutList, Columns3, Search, X, SlidersHorizontal,
@@ -714,12 +714,80 @@ function FollowUpLeadCard({ lead, urgency }) {
   );
 }
 
+// ── Time Filter Mini-Modal ────────────────────────────────────
+
+const TIME_LABELS = {
+  all: 'All Time', today: 'Today', yesterday: 'Yesterday',
+  last7: 'Last 7 Days', last30: 'Last 30 Days', custom: 'Custom Range',
+};
+
+function TimeFilterModal({ open, onClose, preset, customRange, onChange }) {
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 pointer-events-none">
+        <div
+          className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl pointer-events-auto animate-slide-up"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal size={16} className="text-terracotta-600" />
+              <h2 className="text-sm font-semibold text-gray-900">Time Range Filter</h2>
+            </div>
+            <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="px-5 py-4">
+            <TimePresetPicker preset={preset} customRange={customRange} onChange={onChange} />
+          </div>
+          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+            <button
+              onClick={() => { onChange({ preset: 'all', customRange: { startDate: '', endDate: '' } }); onClose(); }}
+              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 font-medium"
+            >
+              Clear
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 font-medium"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Insights Tab ──────────────────────────────────────────────
 
+const FOLLOWUP_PREVIEW = 5;
+
 function InsightsTab({ leads }) {
+  const navigate = useNavigate();
   const [timePreset, setTimePreset] = useState('all');
   const [customRange, setCustomRange] = useState({ startDate: '', endDate: '' });
   const [followUpFilter, setFollowUpFilter] = useState('today');
+  const [timeFilterOpen, setTimeFilterOpen] = useState(false);
 
   const timeRange = resolveTimeRange(timePreset, customRange);
   const insights = useLeadInsights(leads, timeRange);
@@ -742,8 +810,11 @@ function InsightsTab({ leads }) {
     { id: 'next5',   label: 'Next 5 Days', list: followUpsNext5Days },
   ];
   const activeFollowUps = followUpTabs.find(t => t.id === followUpFilter)?.list ?? [];
+  const previewFollowUps = activeFollowUps.slice(0, FOLLOWUP_PREVIEW);
+  const hiddenCount = activeFollowUps.length - FOLLOWUP_PREVIEW;
 
   const totalFollowUps = overdueFollowUps.length + followUpsTodayList.length + followUpsNext5Days.length;
+  const isTimeFiltered = timePreset !== 'all';
 
   function formatCrore(v) {
     if (v >= 10_000_000) return `₹${(v / 10_000_000).toFixed(1)}Cr`;
@@ -752,12 +823,25 @@ function InsightsTab({ leads }) {
     return `₹${v}`;
   }
 
+  function goToList(cls) {
+    navigate(`/leads?tab=list${cls ? `&class=${cls}` : ''}`);
+  }
+
   return (
     <div className="space-y-5">
 
-      {/* ── Section 1: Combined Leads + Conversion with time filter ── */}
+      {/* Time filter modal */}
+      <TimeFilterModal
+        open={timeFilterOpen}
+        onClose={() => setTimeFilterOpen(false)}
+        preset={timePreset}
+        customRange={customRange}
+        onChange={({ preset, customRange: cr }) => { setTimePreset(preset); setCustomRange(cr); }}
+      />
+
+      {/* ── Section 1: Combined Leads + Conversion with filter button ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-8">
             <div>
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-0.5">Total Leads</p>
@@ -773,70 +857,106 @@ function InsightsTab({ leads }) {
               <p className="text-xs text-gray-400 mt-0.5">Leads → Orders</p>
             </div>
           </div>
-          <div className="shrink-0">
-            <Target size={28} className="text-terracotta-400" />
+
+          {/* Filter button */}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <button
+              onClick={() => setTimeFilterOpen(true)}
+              className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg border font-medium transition-colors ${
+                isTimeFiltered
+                  ? 'bg-terracotta-50 border-terracotta-300 text-terracotta-700'
+                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <SlidersHorizontal size={15} />
+              <span className="hidden sm:inline">
+                {isTimeFiltered ? TIME_LABELS[timePreset] || 'Custom' : 'All Time'}
+              </span>
+            </button>
+            {isTimeFiltered && (
+              <button
+                onClick={() => { setTimePreset('all'); setCustomRange({ startDate: '', endDate: '' }); }}
+                className="flex items-center gap-1 text-xs text-terracotta-600 hover:text-terracotta-700"
+              >
+                <X size={11} /> Clear filter
+              </button>
+            )}
           </div>
-        </div>
-        <div className="border-t border-gray-100 pt-4">
-          <TimePresetPicker
-            preset={timePreset}
-            customRange={customRange}
-            onChange={({ preset, customRange: cr }) => {
-              setTimePreset(preset);
-              setCustomRange(cr);
-            }}
-          />
         </div>
       </div>
 
       {/* ── Section 2: Hot / Warm / Cold classification ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Hot */}
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex flex-col">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-1.5 bg-red-100 rounded-lg">
               <Flame size={16} className="text-red-500" />
             </div>
             <span className="text-sm font-semibold text-red-800">Hot Leads</span>
           </div>
-          <p className="text-3xl font-bold text-red-600 mb-1">{hotLeads.length}</p>
-          <p className="text-xs text-red-500">Engaged + follow-up overdue or today</p>
+          <p className="text-3xl font-bold text-red-600 mb-0.5">{hotLeads.length}</p>
+          <p className="text-xs text-red-500 mb-2">Engaged + follow-up overdue or today</p>
           {hotLeads.length > 0 && (
-            <p className="text-xs font-semibold text-red-700 mt-2">
+            <p className="text-xs font-semibold text-red-700 mb-3">
               {formatCrore(hotLeads.reduce((s, l) => s + (l.budget || 0), 0))} potential
             </p>
+          )}
+          {hotLeads.length > 0 && (
+            <button
+              onClick={() => goToList('hot')}
+              className="mt-auto flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 self-start"
+            >
+              View all <ArrowRight size={12} />
+            </button>
           )}
         </div>
 
         {/* Warm */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-1.5 bg-amber-100 rounded-lg">
               <Zap size={16} className="text-amber-500" />
             </div>
             <span className="text-sm font-semibold text-amber-800">Warm Leads</span>
           </div>
-          <p className="text-3xl font-bold text-amber-600 mb-1">{warmLeads.length}</p>
-          <p className="text-xs text-amber-600">Follow-up scheduled or recently engaged</p>
+          <p className="text-3xl font-bold text-amber-600 mb-0.5">{warmLeads.length}</p>
+          <p className="text-xs text-amber-600 mb-2">Follow-up scheduled or recently engaged</p>
           {warmLeads.length > 0 && (
-            <p className="text-xs font-semibold text-amber-700 mt-2">
+            <p className="text-xs font-semibold text-amber-700 mb-3">
               {formatCrore(warmLeads.reduce((s, l) => s + (l.budget || 0), 0))} potential
             </p>
+          )}
+          {warmLeads.length > 0 && (
+            <button
+              onClick={() => goToList('warm')}
+              className="mt-auto flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800 self-start"
+            >
+              View all <ArrowRight size={12} />
+            </button>
           )}
         </div>
 
         {/* Cold */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-1.5 bg-slate-100 rounded-lg">
               <Snowflake size={16} className="text-slate-400" />
             </div>
             <span className="text-sm font-semibold text-slate-700">Cold Leads</span>
           </div>
-          <p className="text-3xl font-bold text-slate-500 mb-1">{coldLeads.length}</p>
-          <p className="text-xs text-slate-500">No engagement in 30+ days</p>
+          <p className="text-3xl font-bold text-slate-500 mb-0.5">{coldLeads.length}</p>
+          <p className="text-xs text-slate-500 mb-2">No engagement in 30+ days</p>
           {coldLeads.length > 0 && (
-            <p className="text-xs font-semibold text-slate-600 mt-2">Consider a re-engagement message</p>
+            <p className="text-xs text-slate-500 mb-3">Consider a re-engagement message</p>
+          )}
+          {coldLeads.length > 0 && (
+            <button
+              onClick={() => goToList('cold')}
+              className="mt-auto flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-700 self-start"
+            >
+              View all <ArrowRight size={12} />
+            </button>
           )}
         </div>
       </div>
@@ -904,20 +1024,19 @@ function InsightsTab({ leads }) {
               <button
                 key={id}
                 onClick={() => setFollowUpFilter(id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
                   followUpFilter === id
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                {label}
+                <span className="hidden sm:inline">{label}</span>
+                <span className="sm:hidden">{id === 'overdue' ? 'Late' : id === 'today' ? 'Today' : '+5d'}</span>
                 {list.length > 0 && (
                   <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-semibold ${
                     followUpFilter === id
-                      ? id === 'overdue'
-                        ? 'bg-red-100 text-red-600'
-                        : id === 'today'
-                        ? 'bg-amber-100 text-amber-700'
+                      ? id === 'overdue' ? 'bg-red-100 text-red-600'
+                        : id === 'today' ? 'bg-amber-100 text-amber-700'
                         : 'bg-blue-100 text-blue-600'
                       : 'bg-gray-200 text-gray-600'
                   }`}>
@@ -929,27 +1048,39 @@ function InsightsTab({ leads }) {
           </div>
         </div>
 
-        {/* Cards */}
-        <div className="p-5">
+        {/* Cards — preview 5, then "View all" */}
+        <div className="divide-y divide-gray-50">
           {activeFollowUps.length === 0 ? (
-            <div className="text-center py-8">
-              <CalendarClock size={24} className="text-gray-300 mx-auto mb-2" />
+            <div className="flex items-center gap-3 px-5 py-4">
+              <CalendarClock size={18} className="text-gray-300 shrink-0" />
               <p className="text-sm text-gray-400">
-                {followUpFilter === 'overdue' ? 'No overdue follow-ups. Great job! 🎉' :
+                {followUpFilter === 'overdue' ? 'No overdue follow-ups — great job! 🎉' :
                  followUpFilter === 'today'   ? 'No follow-ups scheduled for today.' :
                  'No follow-ups in the next 5 days.'}
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {activeFollowUps.map(lead => (
-                <FollowUpLeadCard
-                  key={lead.leadId}
-                  lead={lead}
-                  urgency={followUpFilter === 'overdue' ? 'overdue' : followUpFilter === 'today' ? 'today' : 'upcoming'}
-                />
+            <>
+              {previewFollowUps.map(lead => (
+                <div key={lead.leadId} className="px-5 py-3">
+                  <FollowUpLeadCard
+                    lead={lead}
+                    urgency={followUpFilter === 'overdue' ? 'overdue' : followUpFilter === 'today' ? 'today' : 'upcoming'}
+                  />
+                </div>
               ))}
-            </div>
+              {hiddenCount > 0 && (
+                <div className="px-5 py-3">
+                  <button
+                    onClick={() => goToList()}
+                    className="flex items-center gap-1.5 text-sm font-medium text-terracotta-600 hover:text-terracotta-700"
+                  >
+                    <ArrowRight size={15} />
+                    View {hiddenCount} more in All Leads
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -1041,6 +1172,36 @@ function InsightsTab({ leads }) {
   );
 }
 
+// ── Classification helper (mirrors useLeadInsights logic) ────
+
+function classifyLeadAs(lead) {
+  if (lead.leadStatus === 'Converted' || lead.leadStatus === 'Lost') return null;
+  const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(todayMidnight); tomorrow.setDate(tomorrow.getDate() + 1);
+  const in14Days = new Date(todayMidnight); in14Days.setDate(in14Days.getDate() + 14);
+
+  function pd(str) {
+    if (!str) return null;
+    const [dd, mm, yyyy] = str.split('/').map(Number);
+    if (!dd || !mm || !yyyy) return null;
+    const d = new Date(yyyy, mm - 1, dd); d.setHours(0, 0, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  const followUpD = pd(lead.followUpDate);
+  const leadD = pd(lead.leadDate);
+  const ageDays = leadD ? Math.floor((todayMidnight - leadD) / 86400000) : 0;
+  const isEngaged = lead.leadStatus === 'Follow-up' || lead.leadStatus === 'Interested';
+  const isHotFollowUp = followUpD && followUpD <= todayMidnight;
+  const hasFutureFollowUp = followUpD && followUpD >= tomorrow && followUpD <= in14Days;
+
+  if (isEngaged && isHotFollowUp) return 'hot';
+  const isCold = (lead.leadStatus === 'New Lead' || lead.leadStatus === 'Contacted') && !followUpD && ageDays > 30;
+  if (isCold) return 'cold';
+  if (hasFutureFollowUp || isEngaged) return 'warm';
+  return 'warm'; // default active
+}
+
 // ── Main Leads Page ───────────────────────────────────────────
 
 export default function Leads() {
@@ -1048,6 +1209,7 @@ export default function Leads() {
 
   const tab = searchParams.get('tab') || 'insights';
   const listView = searchParams.get('view') || 'table';
+  const classFilter = searchParams.get('class') || ''; // 'hot' | 'warm' | 'cold' | ''
 
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [filterSearch, setFilterSearch] = useState('');
@@ -1062,6 +1224,18 @@ export default function Leads() {
   const { leads, loading, error, refetch, setLeads } = useLeads();
 
   const totalApplied = appliedStatuses.length + appliedSources.length;
+
+  // Pre-compute classified lead IDs when classFilter is active
+  const classFilteredIds = useMemo(() => {
+    if (!classFilter) return null;
+    return new Set(leads.filter(l => classifyLeadAs(l) === classFilter).map(l => l.leadId));
+  }, [leads, classFilter]);
+
+  function clearClassFilter() {
+    const next = new URLSearchParams(searchParams);
+    next.delete('class');
+    setSearchParams(next);
+  }
 
   function openFilterFlap() {
     setPendingStatuses([...appliedStatuses]);
@@ -1091,6 +1265,7 @@ export default function Leads() {
 
   // Client-side filtered leads for list tab
   const filteredLeads = leads.filter(l => {
+    if (classFilteredIds && !classFilteredIds.has(l.leadId)) return false;
     if (appliedStatuses.length && !appliedStatuses.includes(l.leadStatus)) return false;
     if (appliedSources.length && !appliedSources.includes(l.leadSource)) return false;
     if (filterSearch) {
@@ -1140,7 +1315,7 @@ export default function Leads() {
     }
   }
 
-  const isFiltered = totalApplied > 0 || filterSearch.length > 0;
+  const isFiltered = totalApplied > 0 || filterSearch.length > 0 || !!classFilter;
 
   return (
     <div className="px-4 sm:px-6 py-6 space-y-6">
@@ -1252,8 +1427,19 @@ export default function Leads() {
           </div>
 
           {/* Applied filter chips + result count */}
-          {(totalApplied > 0 || isFiltered) && (
+          {(totalApplied > 0 || isFiltered || classFilter) && (
             <div className="flex flex-wrap items-center gap-2">
+              {/* Classification chip */}
+              {classFilter && (
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full font-medium ${
+                  classFilter === 'hot'  ? 'bg-red-50 text-red-700' :
+                  classFilter === 'warm' ? 'bg-amber-50 text-amber-700' :
+                                          'bg-slate-100 text-slate-700'
+                }`}>
+                  {classFilter === 'hot' ? '🔥 Hot Leads' : classFilter === 'warm' ? '⚡ Warm Leads' : '🧊 Cold Leads'}
+                  <button onClick={clearClassFilter} className="ml-0.5 hover:opacity-70"><X size={11} /></button>
+                </span>
+              )}
               {appliedStatuses.map(s => (
                 <span key={`st-${s}`} className="inline-flex items-center gap-1 px-2.5 py-1 bg-terracotta-50 text-terracotta-700 text-xs rounded-full font-medium">
                   {s}

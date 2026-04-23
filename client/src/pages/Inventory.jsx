@@ -239,6 +239,37 @@ export default function Inventory() {
 
   const activeFilterCount = (appliedCategory ? 1 : 0) + (appliedSubCategory ? 1 : 0);
 
+  // Leads-in-past-30-days per product name (for stock alert card)
+  const leadDemand30dMap = useMemo(() => {
+    if (!allLeads?.length) return {};
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    cutoff.setHours(0, 0, 0, 0);
+
+    function parseDate(str) {
+      if (!str) return null;
+      const [dd, mm, yyyy] = str.split('/').map(Number);
+      if (!dd || !mm || !yyyy) return null;
+      const d = new Date(yyyy, mm - 1, dd);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    function parseProds(str) {
+      if (!str) return [];
+      return str.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    const map = {};
+    allLeads.forEach(lead => {
+      const d = parseDate(lead.leadDate);
+      if (!d || d < cutoff) return;
+      parseProds(lead.productsInterested).forEach(name => {
+        const key = name.toLowerCase();
+        map[key] = (map[key] || 0) + 1;
+      });
+    });
+    return map;
+  }, [allLeads]);
+
   // Cross-reference: low/out-of-stock products that appear in active leads
   const leadsInDemand = useMemo(() => {
     if (!insightsData?.stockAlerts || !allLeads?.length) return [];
@@ -466,7 +497,9 @@ export default function Inventory() {
                     <p className="text-sm text-gray-500">All products are well-stocked</p>
                   ) : (
                     <div className="divide-y divide-gray-50">
-                      {stockAlerts.map((p, i) => (
+                      {stockAlerts.map((p, i) => {
+                        const leadsLast30d = leadDemand30dMap[(p.productName || '').toLowerCase()] || 0;
+                        return (
                         <div key={i} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                           {/* Left: name + pill + meta */}
                           <div className="min-w-0 flex-1">
@@ -482,20 +515,35 @@ export default function Inventory() {
                               )}
                             </div>
                             <p className="text-xs text-gray-400 font-mono mt-0.5">{p.articleId} · {p.category}</p>
-                            {/* Mobile: orders/30d below meta — only when > 0 */}
-                            {p.ordersLast30Days > 0 && (
-                              <p className="md:hidden text-xs font-medium text-indigo-600 mt-0.5">
-                                {p.ordersLast30Days} {p.ordersLast30Days === 1 ? 'order' : 'orders'} in last 30 days
-                              </p>
-                            )}
+                            {/* Mobile: orders + leads/30d below meta */}
+                            <div className="md:hidden flex items-center gap-3 mt-0.5">
+                              {p.ordersLast30Days > 0 && (
+                                <p className="text-xs font-medium text-indigo-600">
+                                  {p.ordersLast30Days} {p.ordersLast30Days === 1 ? 'order' : 'orders'} / 30d
+                                </p>
+                              )}
+                              {leadsLast30d > 0 && (
+                                <p className="text-xs font-medium text-amber-600">
+                                  {leadsLast30d} {leadsLast30d === 1 ? 'enquiry' : 'enquiries'} / 30d
+                                </p>
+                              )}
+                            </div>
                           </div>
 
-                          {/* Center: orders/30d — desktop only, always shown */}
+                          {/* Center: orders/30d — desktop only */}
                           <div className="hidden md:flex flex-col items-center justify-center shrink-0 w-24 text-center">
                             <span className={`text-lg font-bold leading-none ${p.ordersLast30Days > 0 ? 'text-indigo-600' : 'text-gray-300'}`}>
                               {p.ordersLast30Days}
                             </span>
-                            <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">orders / 30 days</span>
+                            <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">orders / 30d</span>
+                          </div>
+
+                          {/* Center: leads/30d — desktop only */}
+                          <div className="hidden md:flex flex-col items-center justify-center shrink-0 w-24 text-center">
+                            <span className={`text-lg font-bold leading-none ${leadsLast30d > 0 ? 'text-amber-500' : 'text-gray-300'}`}>
+                              {leadsLast30d}
+                            </span>
+                            <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">enquiries / 30d</span>
                           </div>
 
                           {/* Right: stock status */}
@@ -515,7 +563,8 @@ export default function Inventory() {
                             )}
                           </div>
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   )}
                 </InsightSection>
