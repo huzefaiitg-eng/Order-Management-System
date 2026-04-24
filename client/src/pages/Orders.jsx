@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Search, RefreshCw, Eye, Plus, X, SlidersHorizontal, MoreVertical, CheckCircle, FileText, Trash2, Lightbulb, ShoppingBag, AlertTriangle, Clock, Users, TrendingDown } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 import { useOrderInsights } from '../hooks/useOrderInsights';
@@ -367,6 +367,7 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill, prefill }) {
 /* ─── Main Orders Page ─── */
 export default function Orders() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'insights';
 
@@ -376,21 +377,17 @@ export default function Orders() {
   const [filters, setFilters] = useState({});
   const [search, setSearch] = useState('');
   const { orders, loading, error, refresh, updateStatus, setOrders } = useOrders(filters);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addOrderPrefill, setAddOrderPrefill] = useState(null);
 
   // Auto-open AddOrderModal when navigated from LeadDetail with openAdd=1
+  // Prefill data is passed via React Router location.state (not sessionStorage) to survive Strict Mode.
+  const [showAddModal, setShowAddModal] = useState(() => searchParams.get('openAdd') === '1');
+  const [addOrderPrefill, setAddOrderPrefill] = useState(() =>
+    searchParams.get('openAdd') === '1' ? (location.state?.prefill ?? null) : null
+  );
+
   useEffect(() => {
     if (searchParams.get('openAdd') === '1') {
-      try {
-        const raw = sessionStorage.getItem('lead_order_prefill');
-        if (raw) {
-          setAddOrderPrefill(JSON.parse(raw));
-          sessionStorage.removeItem('lead_order_prefill');
-        }
-      } catch { /* ignore */ }
-      setShowAddModal(true);
-      // Remove the openAdd param from URL without re-render loop
+      // Clean the openAdd param from the URL without adding a history entry
       const next = new URLSearchParams(searchParams);
       next.delete('openAdd');
       setSearchParams(next, { replace: true });

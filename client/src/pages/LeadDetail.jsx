@@ -388,13 +388,16 @@ export default function LeadDetail() {
   }
 
   function handleCreateOrder() {
-    sessionStorage.setItem('lead_order_prefill', JSON.stringify({
-      customerName: lead.customerName,
-      customerPhone: lead.customerPhone,
-      productName: parseProducts(lead.productsInterested)[0] || '',
-      leadId: lead.leadId,
-    }));
-    navigate('/orders?tab=details&openAdd=1');
+    navigate('/orders?tab=details&openAdd=1', {
+      state: {
+        prefill: {
+          customerName: lead.customerName,
+          customerPhone: lead.customerPhone,
+          productName: parseProducts(lead.productsInterested)[0] || '',
+          leadId: lead.leadId,
+        },
+      },
+    });
   }
 
   if (loading) return (
