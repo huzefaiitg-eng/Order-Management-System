@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   ShoppingBag, BarChart3, Package, Users, Lightbulb, TableProperties,
-  ChevronDown, X, CheckCircle, Send, ArrowRight, Menu
+  ChevronDown, X, CheckCircle, Send, ArrowRight, Menu, Target
 } from 'lucide-react';
 import logo from '../assets/logo.png';
 import heroImg from '../assets/hero.png';
@@ -189,19 +189,21 @@ export default function LandingPage() {
 
   const features = [
     { icon: ShoppingBag, title: 'Multi-Channel Orders', description: 'Manage Amazon, Flipkart, Meesho, Instagram, and WhatsApp orders from a single dashboard.' },
-    { icon: BarChart3, title: 'Smart Dashboard', description: 'Real-time KPIs, revenue trends, profit analytics, and order status breakdowns at a glance.' },
+    { icon: Target, title: 'Lead Management (CRM)', description: 'Capture enquiries from WhatsApp, Instagram, and Facebook. Track your pipeline, schedule follow-ups, and convert leads to orders in one click.' },
+    { icon: BarChart3, title: 'Smart Dashboard', description: 'Real-time KPIs, revenue trends, profit analytics, order status breakdowns, and lead conversion metrics at a glance.' },
     { icon: Package, title: 'Inventory Tracking', description: 'Monitor stock levels, get low-stock alerts, and manage products with auto-generated article IDs.' },
     { icon: Users, title: 'Customer Management', description: 'Customer profiles, order history, active order tracking, and repeat customer insights.' },
-    { icon: Lightbulb, title: 'Actionable Insights', description: 'Delayed order alerts, COD follow-ups, churn risk detection, and low-margin warnings.' },
+    { icon: Lightbulb, title: 'Actionable Insights', description: 'Delayed order alerts, COD follow-ups, churn risk detection, lead pipeline value, and low-margin warnings.' },
     { icon: TableProperties, title: 'Google Sheets Powered', description: 'Uses your existing Google Sheet as the database. No migration, no new tools to learn.' },
   ];
 
   const faqs = [
-    { question: 'How does the Google Sheets integration work?', answer: 'Your order data stays in Google Sheets. Our app connects via a secure service account, reads and writes data in real-time. You keep full control and visibility of your data in Sheets while getting a powerful management interface on top.' },
+    { question: 'How does the Google Sheets integration work?', answer: 'Your order and lead data stays in Google Sheets. Our app connects via a secure service account, reads and writes data in real-time. You keep full control and visibility of your data in Sheets while getting a powerful management interface on top.' },
     { question: 'Can I manage multiple sales channels?', answer: 'Yes! The system supports Amazon, Flipkart, Meesho, Instagram, WhatsApp, and manual orders. Each order is tagged with its source, and you can filter and analyze performance by channel.' },
+    { question: 'What is Lead Management and how does it work?', answer: 'Lead Management is a built-in CRM module that lets you track potential customers from first enquiry through to conversion. You can log leads from WhatsApp, Instagram, Facebook, or walk-ins, assign a pipeline status (New Lead → Contacted → Interested → Converted), schedule follow-ups, and convert a lead into an order with a single click — with the order form pre-filled automatically.' },
     { question: 'Is my data secure?', answer: 'Your Google Sheet is accessed via a service account with read/write permissions only to your specific spreadsheet. Authentication uses JWT tokens, and all API communication is encrypted over HTTPS.' },
     { question: 'How do I get started?', answer: 'Request a demo and we\'ll set up your Google Sheet with the required structure, configure the service account access, and get you up and running within 24 hours.' },
-    { question: 'What does the demo include?', answer: 'You\'ll get a full walkthrough of the dashboard, order management, inventory tracking, and customer insights. We\'ll also show you how data flows between the app and your Google Sheet in real-time.' },
+    { question: 'What does the demo include?', answer: 'You\'ll get a full walkthrough of the dashboard, order management, lead pipeline, inventory tracking, and customer insights. We\'ll also show you how data flows between the app and your Google Sheet in real-time.' },
   ];
 
   return (
@@ -255,10 +257,11 @@ export default function LandingPage() {
           <div className="space-y-6">
             <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 leading-tight">
               Manage Orders.<br />
+              Convert Leads.<br />
               <span className="text-terracotta-600">Delight Customers.</span>
             </h1>
             <p className="text-lg text-gray-600 leading-relaxed max-w-lg">
-              A powerful order management system that connects to your Google Sheet. Track orders from different sources all in one place.
+              A complete business platform for retail sellers. Manage multi-channel orders, track leads from first enquiry to conversion, and monitor inventory — all connected to your Google Sheet.
             </p>
             <div className="flex flex-wrap gap-3">
               <button onClick={() => setShowDemo(true)}
@@ -289,8 +292,8 @@ export default function LandingPage() {
       <section className="bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center space-y-10">
           <div className="space-y-3">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">Your Dashboard at a Glance</h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">Get real-time visibility into orders, revenue, inventory, and customer metrics — all from a single screen.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">Your Business at a Glance</h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">Get real-time visibility into orders, leads, revenue, inventory, and customer metrics — all from a single screen.</p>
           </div>
           <BrowserMockup className="text-left">
             <img src={dashboardImg} alt="Full dashboard view" className="w-full" />
@@ -303,11 +306,13 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24 space-y-10">
           <div className="text-center space-y-3">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">Everything You Need</h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">From order tracking to inventory alerts, we've got your operations covered.</p>
+            <p className="text-gray-600 max-w-2xl mx-auto">From lead capture to order delivery — your entire retail operation, managed in one place.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {features.map((f) => (
-              <FeatureCard key={f.title} {...f} />
+            {features.map((f, i) => (
+              <div key={f.title} className={features.length % 3 === 1 && i === features.length - 1 ? 'sm:col-span-2 lg:col-span-1 lg:col-start-2' : ''}>
+                <FeatureCard {...f} />
+              </div>
             ))}
           </div>
         </div>
@@ -331,8 +336,8 @@ export default function LandingPage() {
       {/* ─── Final CTA ─── */}
       <section className="bg-terracotta-600">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-16 sm:py-20 text-center space-y-6">
-          <h2 className="text-3xl sm:text-4xl font-bold text-white">Ready to Streamline Your Orders?</h2>
-          <p className="text-terracotta-100 text-lg max-w-xl mx-auto">Get started in minutes. Your Google Sheet, supercharged with a powerful management layer.</p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white">Ready to Grow Your Business?</h2>
+          <p className="text-terracotta-100 text-lg max-w-xl mx-auto">From managing orders to converting leads — get a complete retail platform built on your Google Sheet. Up and running in 24 hours.</p>
           <button onClick={() => setShowDemo(true)}
             className="px-8 py-3.5 bg-white text-terracotta-700 rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors shadow-sm inline-flex items-center gap-2">
             Request a Demo <ArrowRight size={16} />
