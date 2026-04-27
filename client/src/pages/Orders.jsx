@@ -250,7 +250,7 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill, prefill }) {
           {!addingNewCustomer ? (
             <SearchableDropdown label="Customer *" placeholder="Search by name or phone..." items={customers}
               displayFn={c => `${c.customerName} - ${c.customerPhone}`} onSelect={handleCustomerSelect}
-              onAddNew={() => setAddingNewCustomer(true)} addNewLabel="Add new customer" />
+              onAddNew={() => setAddingNewCustomer(true)} addNewLabel="customer" />
           ) : (
             <div className="border border-terracotta-200 rounded-lg p-3 space-y-3 bg-terracotta-50/30">
               <div className="flex items-center justify-between">
@@ -285,7 +285,7 @@ function AddOrderModal({ onClose, onAdded, onGenerateBill, prefill }) {
                       <SearchableDropdown label="" placeholder="Search product..." items={products}
                         displayFn={p => `${p.productName} (${p.articleId})`}
                         onSelect={(p) => handleProductSelectForLine(idx, p)}
-                        onAddNew={() => setAddingNewProductIdx(idx)} addNewLabel="Add new product" />
+                        onAddNew={() => setAddingNewProductIdx(idx)} addNewLabel="product" />
                       {line.productName && <p className="text-xs text-gray-500">Selected: {line.productName} (Cost: ₹{line.unitCost})</p>}
                       <div className="flex gap-2">
                         <div className="flex-1">

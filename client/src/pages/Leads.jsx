@@ -180,7 +180,7 @@ function AddLeadModal({ onClose, onSaved }) {
                 keyFn={c => c.customerPhone}
                 onSelect={handleCustomerSelect}
                 onAddNew={() => { setAddingNewCustomer(true); setError(''); }}
-                addNewLabel="Add new customer"
+                addNewLabel="customer"
               />
               {form.customerName && (
                 <p className="text-xs text-gray-500 mt-1">

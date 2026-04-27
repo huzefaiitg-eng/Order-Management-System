@@ -116,35 +116,43 @@ export default function SearchableDropdown({
       </div>
 
       {open && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-          {filtered.map((item, i) => (
-            <button
-              key={`${getKey(item)}-${i}`}
-              type="button"
-              onClick={() => handlePick(item)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-terracotta-50 transition-colors"
-            >
-              {displayFn(item)}
-            </button>
-          ))}
-          {filtered.length === 0 && (
-            <p className="px-3 py-2 text-sm text-gray-400">
-              {multi && selected.length > 0 && items.length === selected.length
-                ? 'All items selected'
-                : 'No results'}
-            </p>
-          )}
+        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg flex flex-col max-h-48">
+          {/* Scrollable list */}
+          <div className="overflow-y-auto flex-1 min-h-0">
+            {filtered.map((item, i) => (
+              <button
+                key={`${getKey(item)}-${i}`}
+                type="button"
+                onClick={() => handlePick(item)}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-terracotta-50 transition-colors"
+              >
+                {displayFn(item)}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="px-3 py-2 text-sm text-gray-400">
+                {multi && selected.length > 0 && items.length === selected.length
+                  ? 'All items selected'
+                  : 'No results'}
+              </p>
+            )}
+          </div>
+
+          {/* Sticky "Add New" footer */}
           {onAddNew && (
-            <button
-              type="button"
-              onClick={() => {
-                onAddNew();
-                setOpen(false);
-              }}
-              className="w-full text-left px-3 py-2 text-sm text-terracotta-600 font-medium hover:bg-terracotta-50 border-t border-gray-100"
-            >
-              + {addNewLabel}
-            </button>
+            <div className="border-t border-gray-100 px-3 py-2.5 flex items-center justify-between bg-white shrink-0 rounded-b-lg">
+              <span className="text-xs text-gray-400">Not able to find your {addNewLabel}?</span>
+              <button
+                type="button"
+                onClick={() => {
+                  onAddNew();
+                  setOpen(false);
+                }}
+                className="text-sm text-terracotta-600 font-semibold hover:underline ml-2 shrink-0"
+              >
+                Add New
+              </button>
+            </div>
           )}
         </div>
       )}
