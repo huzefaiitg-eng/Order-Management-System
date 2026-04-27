@@ -14,6 +14,7 @@ import { StatusBadge, LEAD_STATUSES, STATUS_CONFIG } from './Leads';
 import SearchableDropdown from '../components/SearchableDropdown';
 import DetailOverlay from '../components/DetailOverlay';
 import Loader from '../components/Loader';
+import ConfirmModal from '../components/ConfirmModal';
 
 const LEAD_SOURCES_LIST = ['WhatsApp', 'Instagram', 'Facebook', 'Referral', 'Walk-in/Offline'];
 
@@ -288,6 +289,7 @@ export default function LeadDetail() {
 
   // Status inline change
   const [statusChanging, setStatusChanging] = useState(false);
+  const [confirmModal, setConfirmModal] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -367,24 +369,30 @@ export default function LeadDetail() {
     }
   }
 
-  async function handleDelete() {
-    if (!window.confirm('Delete this lead? This cannot be undone.')) return;
-    try {
-      await deleteLead(leadId);
-      navigate('/leads?tab=list');
-    } catch (err) {
-      alert('Failed to delete lead: ' + err.message);
-    }
+  function handleDelete() {
+    setConfirmModal({
+      title: 'Delete Lead',
+      message: `Delete "${lead?.customerName}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        await deleteLead(leadId);
+        navigate('/leads?tab=list');
+      },
+    });
   }
 
-  async function handleArchive() {
-    if (!window.confirm('Archive this lead? You can restore it from the Archived Leads page.')) return;
-    try {
-      await archiveLead(leadId);
-      navigate('/leads?tab=list');
-    } catch (err) {
-      alert('Failed to archive lead: ' + err.message);
-    }
+  function handleArchive() {
+    setConfirmModal({
+      title: 'Archive Lead',
+      message: `Archive "${lead?.customerName}"? You can restore it from the Archived Leads page.`,
+      confirmLabel: 'Archive',
+      variant: 'warning',
+      onConfirm: async () => {
+        await archiveLead(leadId);
+        navigate('/leads?tab=list');
+      },
+    });
   }
 
   function handleCreateOrder() {
@@ -740,6 +748,7 @@ export default function LeadDetail() {
         </div>
       )}
     </div>
+      {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </DetailOverlay>
   );
 }

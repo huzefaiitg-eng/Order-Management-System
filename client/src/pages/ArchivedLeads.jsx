@@ -7,6 +7,7 @@ import {
 import { fetchArchivedLeads, unarchiveLead, deleteLead } from '../services/api';
 import { StatusBadge } from './Leads';
 import Loader from '../components/Loader';
+import ConfirmModal from '../components/ConfirmModal';
 
 function parseProducts(str) {
   if (!str) return [];
@@ -19,6 +20,7 @@ export default function ArchivedLeads() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [actionLoading, setActionLoading] = useState(null); // leadId + '_action'
+  const [confirmModal, setConfirmModal] = useState(null);
 
   function load() {
     setLoading(true);
@@ -41,30 +43,36 @@ export default function ArchivedLeads() {
     );
   });
 
-  async function handleUnarchive(lead) {
-    if (!window.confirm(`Restore "${lead.customerName}" back to the active leads list?`)) return;
-    setActionLoading(lead.leadId + '_unarchive');
-    try {
-      await unarchiveLead(lead.leadId);
-      setLeads(prev => prev.filter(l => l.leadId !== lead.leadId));
-    } catch (err) {
-      alert('Failed to unarchive: ' + err.message);
-    } finally {
-      setActionLoading(null);
-    }
+  function handleUnarchive(lead) {
+    setConfirmModal({
+      title: 'Restore Lead',
+      message: `Restore "${lead.customerName}" back to the active leads list?`,
+      confirmLabel: 'Restore',
+      variant: 'warning',
+      onConfirm: async () => {
+        setActionLoading(lead.leadId + '_unarchive');
+        await unarchiveLead(lead.leadId);
+        setLeads(prev => prev.filter(l => l.leadId !== lead.leadId));
+        setActionLoading(null);
+        setConfirmModal(null);
+      },
+    });
   }
 
-  async function handleDelete(lead) {
-    if (!window.confirm(`Permanently delete "${lead.customerName}"? This cannot be undone and removes the row from the sheet.`)) return;
-    setActionLoading(lead.leadId + '_delete');
-    try {
-      await deleteLead(lead.leadId);
-      setLeads(prev => prev.filter(l => l.leadId !== lead.leadId));
-    } catch (err) {
-      alert('Failed to delete: ' + err.message);
-    } finally {
-      setActionLoading(null);
-    }
+  function handleDelete(lead) {
+    setConfirmModal({
+      title: 'Delete Lead',
+      message: `Permanently delete "${lead.customerName}"? This cannot be undone and removes the row from the sheet.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        setActionLoading(lead.leadId + '_delete');
+        await deleteLead(lead.leadId);
+        setLeads(prev => prev.filter(l => l.leadId !== lead.leadId));
+        setActionLoading(null);
+        setConfirmModal(null);
+      },
+    });
   }
 
   return (
@@ -273,6 +281,7 @@ export default function ArchivedLeads() {
           </div>
         </>
       )}
+      {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </div>
   );
 }

@@ -6,42 +6,45 @@ import { unarchiveProduct, deleteProduct } from '../services/api';
 import { formatCurrency } from '../utils/formatters';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function ArchivedInventory() {
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({ status: 'Archived' });
   const { products, loading, error, refresh } = useInventory(filters);
-  const [actionLoading, setActionLoading] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
 
   const handleSearch = (e) => {
     e.preventDefault();
     setFilters({ status: 'Archived', search });
   };
 
-  const handleUnarchive = async (product) => {
-    if (!window.confirm(`Unarchive "${product.productName}"? It will be moved back to the active inventory.`)) return;
-    setActionLoading(product.articleId + '_unarchive');
-    try {
-      await unarchiveProduct(product.articleId);
-      refresh();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setActionLoading(null);
-    }
+  const handleUnarchive = (product) => {
+    setConfirmModal({
+      title: 'Unarchive Product',
+      message: `Restore "${product.productName}" back to the active inventory?`,
+      confirmLabel: 'Unarchive',
+      variant: 'warning',
+      onConfirm: async () => {
+        await unarchiveProduct(product.articleId);
+        refresh();
+        setConfirmModal(null);
+      },
+    });
   };
 
-  const handleDelete = async (product) => {
-    if (!window.confirm(`Permanently delete "${product.productName}"? This cannot be undone and will remove it from the Google Sheet.`)) return;
-    setActionLoading(product.articleId + '_delete');
-    try {
-      await deleteProduct(product.articleId);
-      refresh();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setActionLoading(null);
-    }
+  const handleDelete = (product) => {
+    setConfirmModal({
+      title: 'Delete Product',
+      message: `Permanently delete "${product.productName}"? This cannot be undone and will remove it from the sheet.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        await deleteProduct(product.articleId);
+        refresh();
+        setConfirmModal(null);
+      },
+    });
   };
 
   return (
@@ -119,16 +122,14 @@ export default function ArchivedInventory() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleUnarchive(product)}
-                          disabled={actionLoading === product.articleId + '_unarchive'}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 disabled:opacity-50 transition-colors"
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
                         >
                           <RotateCcw size={13} />
                           Unarchive
                         </button>
                         <button
                           onClick={() => handleDelete(product)}
-                          disabled={actionLoading === product.articleId + '_delete'}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
                         >
                           <Trash2 size={13} />
                           Delete
@@ -150,6 +151,7 @@ export default function ArchivedInventory() {
           </div>
         </div>
       )}
+      {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </div>
   );
 }

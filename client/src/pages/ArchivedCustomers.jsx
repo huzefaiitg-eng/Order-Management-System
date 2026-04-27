@@ -5,42 +5,45 @@ import { useCustomers } from '../hooks/useCustomers';
 import { unarchiveCustomer, deleteCustomer } from '../services/api';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function ArchivedCustomers() {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const { customers, loading, error, refresh } = useCustomers(query, 'Archived');
-  const [actionLoading, setActionLoading] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
 
   const handleSearch = (e) => {
     e.preventDefault();
     setQuery(search);
   };
 
-  const handleUnarchive = async (customer) => {
-    if (!window.confirm(`Unarchive ${customer.customerName}? They will be moved back to the active list.`)) return;
-    setActionLoading(customer.customerPhone + '_unarchive');
-    try {
-      await unarchiveCustomer(customer.customerPhone);
-      refresh();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setActionLoading(null);
-    }
+  const handleUnarchive = (customer) => {
+    setConfirmModal({
+      title: 'Unarchive Customer',
+      message: `Restore ${customer.customerName} back to the active customers list?`,
+      confirmLabel: 'Unarchive',
+      variant: 'warning',
+      onConfirm: async () => {
+        await unarchiveCustomer(customer.customerPhone);
+        refresh();
+        setConfirmModal(null);
+      },
+    });
   };
 
-  const handleDelete = async (customer) => {
-    if (!window.confirm(`Permanently delete ${customer.customerName}? This cannot be undone and will remove them from the Google Sheet.`)) return;
-    setActionLoading(customer.customerPhone + '_delete');
-    try {
-      await deleteCustomer(customer.customerPhone);
-      refresh();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setActionLoading(null);
-    }
+  const handleDelete = (customer) => {
+    setConfirmModal({
+      title: 'Delete Customer',
+      message: `Permanently delete ${customer.customerName}? This cannot be undone and will remove them from the sheet.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        await deleteCustomer(customer.customerPhone);
+        refresh();
+        setConfirmModal(null);
+      },
+    });
   };
 
   return (
@@ -131,16 +134,14 @@ export default function ArchivedCustomers() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleUnarchive(customer)}
-                          disabled={actionLoading === customer.customerPhone + '_unarchive'}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 disabled:opacity-50 transition-colors"
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
                         >
                           <RotateCcw size={13} />
                           Unarchive
                         </button>
                         <button
                           onClick={() => handleDelete(customer)}
-                          disabled={actionLoading === customer.customerPhone + '_delete'}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
                         >
                           <Trash2 size={13} />
                           Delete
@@ -162,6 +163,7 @@ export default function ArchivedCustomers() {
           </div>
         </div>
       )}
+      {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </div>
   );
 }

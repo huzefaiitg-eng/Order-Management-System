@@ -13,6 +13,7 @@ import DetailOverlay from '../components/DetailOverlay';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
 import Toast from '../components/Toast';
+import ConfirmModal from '../components/ConfirmModal';
 
 const ADD_REASONS = ['New purchase', 'Supplier delivery', 'Return to inventory', 'Inventory correction', 'Other'];
 const SUBTRACT_REASONS = ['Damaged goods', 'Shrinkage', 'Physical recount', 'Inventory correction', 'Other'];
@@ -31,6 +32,7 @@ export default function ProductDetail() {
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [archiving, setArchiving] = useState(false);
+  const [confirmModal, setConfirmModal] = useState(null);
 
   // Manage Stock modal
   const [stockModalOpen, setStockModalOpen] = useState(false);
@@ -89,16 +91,17 @@ export default function ProductDetail() {
     setStockCustomReason('');
   };
 
-  const handleArchive = async () => {
-    if (!window.confirm(`Archive "${product.productName}"? It will be moved to the archived list.`)) return;
-    setArchiving(true);
-    try {
-      await archiveProduct(articleId);
-      navigate('/inventory');
-    } catch (err) {
-      alert(err.message);
-      setArchiving(false);
-    }
+  const handleArchive = () => {
+    setConfirmModal({
+      title: 'Archive Product',
+      message: `Archive "${product.productName}"? It will be moved to the archived inventory list.`,
+      confirmLabel: 'Archive',
+      variant: 'warning',
+      onConfirm: async () => {
+        await archiveProduct(articleId);
+        navigate('/inventory');
+      },
+    });
   };
 
   const startEditing = () => {
@@ -165,19 +168,30 @@ export default function ProductDetail() {
     if (stockDirection === '+' && product.maxStock > 0) {
       const projected = product.instockQuantity + raw;
       if (projected > product.maxStock) {
-        const ok = window.confirm(
-          `This will bring stock to ${projected} units, above your Max Stock target of ${product.maxStock}. Continue?`
-        );
-        if (!ok) return;
+        setConfirmModal({
+          title: 'Exceeds Max Stock',
+          message: `This will bring stock to ${projected} units, above your Max Stock target of ${product.maxStock}. Continue anyway?`,
+          confirmLabel: 'Continue',
+          variant: 'warning',
+          onConfirm: async () => {
+            setConfirmModal(null);
+            await proceedStockSave(delta, reason);
+          },
+        });
+        return;
       }
     }
 
+    await proceedStockSave(delta, reason);
+  };
+
+  const proceedStockSave = async (delta, reason) => {
     setStockSaving(true);
     try {
       const updated = await adjustStock(articleId, {
         delta,
         reason,
-        changeType: stockDirection === '+' ? 'restock' : 'adjust',
+        changeType: delta > 0 ? 'restock' : 'adjust',
       });
       setProduct(prev => ({
         ...prev,
@@ -185,7 +199,7 @@ export default function ProductDetail() {
         availableQuantity: updated.instockQuantity,
       }));
       const absQty = Math.abs(delta);
-      setToast({ type: 'success', message: `Stock ${stockDirection === '+' ? 'increased' : 'reduced'} by ${absQty} unit${absQty !== 1 ? 's' : ''}` });
+      setToast({ type: 'success', message: `Stock ${delta > 0 ? 'increased' : 'reduced'} by ${absQty} unit${absQty !== 1 ? 's' : ''}` });
       setStockQty('');
       setStockCustomReason('');
       setStockTab('audit');
@@ -728,6 +742,7 @@ export default function ProductDetail() {
         </div>
       </div>
     )}
+      {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </DetailOverlay>
   );
 }

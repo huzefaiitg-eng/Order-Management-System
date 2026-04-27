@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Phone, MapPin, Package, CreditCard, Clock, FileText, Wallet } from 'lucide-react';
-import { fetchOrders, updateOrderStatus, updatePaymentStatus, fetchOrderAudit } from '../services/api';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Phone, MapPin, Package, CreditCard, Clock, FileText, Wallet, Trash2 } from 'lucide-react';
+import { fetchOrders, updateOrderStatus, updatePaymentStatus, fetchOrderAudit, deleteOrder } from '../services/api';
 import StatusBadge from '../components/StatusBadge';
 import StatusSelect from '../components/StatusSelect';
 import DetailOverlay from '../components/DetailOverlay';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
+import ConfirmModal from '../components/ConfirmModal';
 import { formatCurrency, ORDER_STATUSES, STATUS_COLORS } from '../utils/formatters';
 import BillModal from '../components/BillModal';
 
@@ -29,7 +30,9 @@ function PaymentStatusBadge({ status }) {
 
 export default function OrderDetail() {
   const { rowIndex } = useParams();
+  const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
   const [customerOrders, setCustomerOrders] = useState([]);
   const [auditHistory, setAuditHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +97,21 @@ export default function OrderDetail() {
     }
   };
 
+  const handleDelete = () => {
+    if (!order) return;
+    const label = `${order.customerName} — ${order.productLines?.[0]?.productName || order.productOrdered} (${order.orderDate})`;
+    setConfirmModal({
+      title: 'Delete Order',
+      message: `Delete "${label}"? This permanently removes the row from the sheet and cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        await deleteOrder(order.rowIndex);
+        navigate('/orders');
+      },
+    });
+  };
+
   const handleStatusUpdate = async (newStatus) => {
     await updateOrderStatus(order.rowIndex, newStatus);
     setOrder(prev => ({ ...prev, orderStatus: newStatus }));
@@ -131,6 +149,9 @@ export default function OrderDetail() {
               <div className="flex items-center gap-1.5 shrink-0">
                 <button onClick={() => setShowBill(true)} className="p-2 text-gray-400 hover:text-terracotta-600 hover:bg-terracotta-50 rounded-lg transition-colors" title="Generate Bill">
                   <FileText size={18} />
+                </button>
+                <button onClick={handleDelete} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete Order">
+                  <Trash2 size={18} />
                 </button>
                 <StatusSelect currentStatus={order.orderStatus} onUpdate={handleStatusUpdate} />
               </div>
@@ -383,6 +404,7 @@ export default function OrderDetail() {
       </div>
 
       {showBill && <BillModal order={order} onClose={() => setShowBill(false)} />}
+      {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </div>
     </DetailOverlay>
   );

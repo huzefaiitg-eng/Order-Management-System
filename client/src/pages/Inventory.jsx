@@ -15,6 +15,7 @@ import { useInventoryInsights } from '../hooks/useInventoryInsights';
 import InsightSection from '../components/InsightSection';
 import { parseCategories, joinCategories } from '../utils/categoryUtils';
 import { useLeads } from '../hooks/useLeads';
+import ConfirmModal from '../components/ConfirmModal';
 
 const BATCH_SIZE = 25;
 
@@ -215,6 +216,7 @@ export default function Inventory() {
   const [summary, setSummary] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [archiving, setArchiving] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
 
   // Filter flap state
   const [filterOpen, setFilterOpen] = useState(false);
@@ -366,20 +368,21 @@ export default function Inventory() {
     setSortOpen(false);
   };
 
-  const handleArchive = async (e, product) => {
+  const handleArchive = (e, product) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!window.confirm(`Archive "${product.productName}"? It will be moved to the archived list.`)) return;
-    setArchiving(product.articleId);
-    try {
-      await archiveProduct(product.articleId);
-      refresh();
-      fetchInventorySummary().then(setSummary);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setArchiving(null);
-    }
+    setConfirmModal({
+      title: 'Archive Product',
+      message: `Archive "${product.productName}"? It will be moved to the archived inventory list.`,
+      confirmLabel: 'Archive',
+      variant: 'warning',
+      onConfirm: async () => {
+        await archiveProduct(product.articleId);
+        refresh();
+        fetchInventorySummary().then(setSummary);
+        setConfirmModal(null);
+      },
+    });
   };
 
   const sorted = useMemo(() => {
@@ -1024,6 +1027,7 @@ export default function Inventory() {
       )}
 
       {showAddModal && <AddProductModal onClose={() => setShowAddModal(false)} onAdded={handleRefresh} categories={categories} categorySubCategories={categorySubCategories} />}
+      {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </div>
   );
 }

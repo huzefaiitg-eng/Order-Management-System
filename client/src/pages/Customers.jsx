@@ -10,6 +10,7 @@ import { addCustomer, archiveCustomer } from '../services/api';
 import InsightSection from '../components/InsightSection';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
+import ConfirmModal from '../components/ConfirmModal';
 import { formatCurrency, formatPercent } from '../utils/formatters';
 
 const BATCH_SIZE = 25;
@@ -99,6 +100,7 @@ export default function Customers() {
   const [query, setQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [archiving, setArchiving] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
 
   // Filter flap state
   const [filterOpen, setFilterOpen] = useState(false);
@@ -171,13 +173,19 @@ export default function Customers() {
     setActiveSort(key); setSortField(opt.sortField); setSortDir(opt.sortDir); setSortOpen(false);
   };
 
-  const handleArchive = async (e, customer) => {
+  const handleArchive = (e, customer) => {
     e.preventDefault(); e.stopPropagation();
-    if (!window.confirm(`Archive ${customer.customerName}? They will be moved to the archived list.`)) return;
-    setArchiving(customer.customerPhone);
-    try { await archiveCustomer(customer.customerPhone); refresh(); }
-    catch (err) { alert(err.message); }
-    finally { setArchiving(null); }
+    setConfirmModal({
+      title: 'Archive Customer',
+      message: `Archive ${customer.customerName}? They will be moved to the archived customers list.`,
+      confirmLabel: 'Archive',
+      variant: 'warning',
+      onConfirm: async () => {
+        await archiveCustomer(customer.customerPhone);
+        refresh();
+        setConfirmModal(null);
+      },
+    });
   };
 
   const filteredByBucket = useMemo(() => {
@@ -533,6 +541,7 @@ export default function Customers() {
       )}
 
       {showAddModal && <AddCustomerModal onClose={() => setShowAddModal(false)} onAdded={refresh} />}
+      {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </div>
   );
 }

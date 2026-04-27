@@ -7,6 +7,7 @@ import StatusSelect from '../components/StatusSelect';
 import DetailOverlay from '../components/DetailOverlay';
 import Loader from '../components/Loader';
 import ErrorMessage from '../components/ErrorMessage';
+import ConfirmModal from '../components/ConfirmModal';
 import { formatCurrency } from '../utils/formatters';
 
 export default function CustomerDetail() {
@@ -22,6 +23,7 @@ export default function CustomerDetail() {
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [archiving, setArchiving] = useState(false);
+  const [confirmModal, setConfirmModal] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -41,16 +43,17 @@ export default function CustomerDetail() {
     }));
   };
 
-  const handleArchive = async () => {
-    if (!window.confirm(`Archive ${customer.customerName}? They will be moved to the archived list.`)) return;
-    setArchiving(true);
-    try {
-      await archiveCustomer(customer.customerPhone);
-      navigate('/customers');
-    } catch (err) {
-      alert(err.message);
-      setArchiving(false);
-    }
+  const handleArchive = () => {
+    setConfirmModal({
+      title: 'Archive Customer',
+      message: `Archive ${customer.customerName}? They will be moved to the archived customers list.`,
+      confirmLabel: 'Archive',
+      variant: 'warning',
+      onConfirm: async () => {
+        await archiveCustomer(customer.customerPhone);
+        navigate('/customers');
+      },
+    });
   };
 
   const startEditing = () => {
@@ -272,6 +275,7 @@ export default function CustomerDetail() {
         )}
       </div>
     </div>
+      {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </DetailOverlay>
   );
 }

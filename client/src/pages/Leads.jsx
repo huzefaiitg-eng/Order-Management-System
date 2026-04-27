@@ -18,6 +18,7 @@ import InsightSection from '../components/InsightSection';
 import SearchableDropdown from '../components/SearchableDropdown';
 import TimePresetPicker from '../components/TimePresetPicker';
 import Loader from '../components/Loader';
+import ConfirmModal from '../components/ConfirmModal';
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -418,7 +419,7 @@ function KanbanBoard({ leads, onStatusChange, onDelete, onArchive }) {
                         View
                       </Link>
                       <button
-                        onClick={e => { e.stopPropagation(); onArchive(lead.leadId); }}
+                        onClick={e => { e.stopPropagation(); onArchive(lead.leadId, lead.customerName); }}
                         className="p-0.5 text-gray-300 hover:text-amber-500 rounded transition-colors"
                         title="Archive"
                       >
@@ -593,7 +594,7 @@ function LeadTable({ leads, onStatusChange, onDelete, onArchive }) {
                       View →
                     </Link>
                     <button
-                      onClick={() => onArchive(lead.leadId)}
+                      onClick={() => onArchive(lead.leadId, lead.customerName)}
                       className="p-1 text-gray-300 hover:text-amber-500 hover:bg-amber-50 rounded transition-colors"
                       title="Archive lead"
                     >
@@ -1215,6 +1216,7 @@ export default function Leads() {
   const classFilter = searchParams.get('class') || ''; // 'hot' | 'warm' | 'cold' | ''
 
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [confirmModal, setConfirmModal] = useState(null);
   const [filterSearch, setFilterSearch] = useState('');
 
   // Filter flap state (pending = in-progress inside the flap; applied = committed)
@@ -1308,25 +1310,32 @@ export default function Leads() {
     }
   }
 
-  async function handleDelete(leadId) {
-    if (!window.confirm('Delete this lead? This cannot be undone.')) return;
-    try {
-      await deleteLead(leadId);
-      setLeads(prev => prev.filter(l => l.leadId !== leadId));
-    } catch (err) {
-      console.error('Delete failed:', err.message);
-    }
+  function handleDelete(leadId, customerName) {
+    setConfirmModal({
+      title: 'Delete Lead',
+      message: `Delete "${customerName}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        await deleteLead(leadId);
+        setLeads(prev => prev.filter(l => l.leadId !== leadId));
+        setConfirmModal(null);
+      },
+    });
   }
 
-  async function handleArchive(leadId) {
-    if (!window.confirm('Archive this lead? You can restore it from the Archived Leads page.')) return;
-    try {
-      await archiveLead(leadId);
-      setLeads(prev => prev.filter(l => l.leadId !== leadId));
-    } catch (err) {
-      console.error('Archive failed:', err.message);
-      alert('Failed to archive lead: ' + err.message);
-    }
+  function handleArchive(leadId, customerName) {
+    setConfirmModal({
+      title: 'Archive Lead',
+      message: `Archive "${customerName}"? You can restore it from the Archived Leads page.`,
+      confirmLabel: 'Archive',
+      variant: 'warning',
+      onConfirm: async () => {
+        await archiveLead(leadId);
+        setLeads(prev => prev.filter(l => l.leadId !== leadId));
+        setConfirmModal(null);
+      },
+    });
   }
 
   const isFiltered = totalApplied > 0 || filterSearch.length > 0 || !!classFilter;
@@ -1587,6 +1596,7 @@ export default function Leads() {
           onSaved={handleLeadAdded}
         />
       )}
+      {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </div>
   );
 }

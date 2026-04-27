@@ -14,6 +14,7 @@ import { useCategories } from '../hooks/useCategories';
 import { useAuth } from '../context/AuthContext';
 import BillModal from '../components/BillModal';
 import SearchableDropdown from '../components/SearchableDropdown';
+import ConfirmModal from '../components/ConfirmModal';
 
 const BATCH_SIZE = 25;
 
@@ -398,16 +399,21 @@ export default function Orders() {
   const [sortField, setSortField] = useState('orderDate');
   const [sortDir, setSortDir] = useState('desc');
   const [billOrder, setBillOrder] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
 
-  const handleDelete = async (order) => {
+  const handleDelete = (order) => {
     const label = `${order.customerName} — ${order.productLines?.[0]?.productName || order.productOrdered} (${order.orderDate})`;
-    if (!window.confirm(`Delete this order?\n\n${label}\n\nThis permanently removes the row from the sheet and cannot be undone.`)) return;
-    try {
-      await deleteOrder(order.rowIndex);
-      setOrders(prev => prev.filter(o => o.rowIndex !== order.rowIndex));
-    } catch (err) {
-      alert('Failed to delete order: ' + err.message);
-    }
+    setConfirmModal({
+      title: 'Delete Order',
+      message: `Delete "${label}"? This permanently removes the row from the sheet and cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        await deleteOrder(order.rowIndex);
+        setOrders(prev => prev.filter(o => o.rowIndex !== order.rowIndex));
+        setConfirmModal(null);
+      },
+    });
   };
 
   // Filter flap state
@@ -883,6 +889,7 @@ export default function Orders() {
 
       {showAddModal && <AddOrderModal onClose={() => { setShowAddModal(false); setAddOrderPrefill(null); }} onAdded={refresh} onGenerateBill={setBillOrder} prefill={addOrderPrefill} />}
       {billOrder && <BillModal order={billOrder} onClose={() => setBillOrder(null)} />}
+      {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </div>
   );
 }
