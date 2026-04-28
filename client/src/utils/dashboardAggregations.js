@@ -265,6 +265,72 @@ export function computeMultiSeriesRevenueOverTime(orders, { groupBy, selectedKey
 }
 
 /**
+ * Revenue and profit grouped by sales channel (orderFrom).
+ * Returns array sorted by revenue descending.
+ *   → [{ name, revenue, profit, orders }, ...]
+ */
+export function computeChannelRevenue(orders) {
+  const map = {};
+  for (const o of orders) {
+    const key = o.orderFrom || 'Unknown';
+    if (!map[key]) map[key] = { name: key, revenue: 0, profit: 0, orders: 0 };
+    map[key].revenue += Number(o.pricePaid) || 0;
+    map[key].profit  += Number(o.profit)    || 0;
+    map[key].orders  += 1;
+  }
+  return Object.values(map).sort((a, b) => b.revenue - a.revenue);
+}
+
+/**
+ * Top N products by appearance count across all productLines.
+ * Revenue per product = full order pricePaid (approximate — no per-line price in API).
+ *   → [{ name, orders, revenue }, ...] sorted by orders desc, length ≤ n
+ */
+export function computeTopProducts(orders, n = 10) {
+  const countMap = {};
+  const revMap   = {};
+  for (const o of orders) {
+    const lines = Array.isArray(o.productLines) ? o.productLines : [];
+    for (const line of lines) {
+      const name = line.productName || 'Unknown';
+      countMap[name] = (countMap[name] || 0) + 1;
+      revMap[name]   = (revMap[name]   || 0) + (Number(o.pricePaid) || 0);
+    }
+  }
+  return Object.entries(countMap)
+    .map(([name, orders]) => ({ name, orders, revenue: revMap[name] || 0 }))
+    .sort((a, b) => b.orders - a.orders)
+    .slice(0, n);
+}
+
+/**
+ * Sales health metrics derived from a filtered order set.
+ *   → { uniqueCustomers, repeatCustomers, repeatRate, activeOrders, codPending }
+ *
+ * - repeatCustomers = unique phones that appear ≥2 times
+ * - activeOrders    = orders NOT in a terminal status
+ * - codPending      = COD orders that are Delivered (cash to collect)
+ */
+export function computeSalesHealth(orders) {
+  const TERMINAL = new Set(['Delivered', 'Returned', 'Cancelled', 'Refunded']);
+  const phoneCounts = {};
+  let activeOrders = 0;
+  let codPending   = 0;
+
+  for (const o of orders) {
+    const phone = String(o.customerPhone || '').trim();
+    if (phone) phoneCounts[phone] = (phoneCounts[phone] || 0) + 1;
+    if (!TERMINAL.has(o.orderStatus)) activeOrders++;
+    if (o.modeOfPayment === 'COD' && o.orderStatus === 'Delivered') codPending++;
+  }
+
+  const uniqueCustomers  = Object.keys(phoneCounts).length;
+  const repeatCustomers  = Object.values(phoneCounts).filter(c => c >= 2).length;
+  const repeatRate       = uniqueCustomers > 0 ? (repeatCustomers / uniqueCustomers) * 100 : 0;
+  return { uniqueCustomers, repeatCustomers, repeatRate, activeOrders, codPending };
+}
+
+/**
  * Count applied filter dimensions for a filters object.
  * Used to drive the little "2" badge on the filter button.
  */
