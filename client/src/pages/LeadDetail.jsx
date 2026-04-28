@@ -362,6 +362,23 @@ export default function LeadDetail() {
     try {
       await updateLead(leadId, { leadStatus: newStatus });
       setLead(prev => ({ ...prev, leadStatus: newStatus }));
+
+      // Auto-close any pending follow-ups when lead is Converted or Lost
+      if (newStatus === 'Converted' || newStatus === 'Lost') {
+        const pending = followUps.filter(f => f.happened !== 'Yes');
+        if (pending.length > 0) {
+          const autoRemark = `Auto-closed: Lead marked as ${newStatus}`;
+          const updated = await Promise.all(
+            pending.map(f => markLeadFollowUpDone(leadId, f.followUpId, { remarks: autoRemark }))
+          );
+          setFollowUps(prev =>
+            sortFollowUps(prev.map(f => {
+              const done = updated.find(u => u.followUpId === f.followUpId);
+              return done ? done : f;
+            }))
+          );
+        }
+      }
     } catch (err) {
       alert('Failed to update status: ' + err.message);
     } finally {
