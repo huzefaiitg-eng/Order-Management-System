@@ -234,7 +234,6 @@ export default function Inventory() {
 
   // Lazy loading
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
-  const sentinelRef = useRef(null);
 
   // Category Insights accordion state
   const [expandedCategories, setExpandedCategories] = useState(new Set());
@@ -424,15 +423,6 @@ export default function Inventory() {
 
   useEffect(() => { setVisibleCount(BATCH_SIZE); }, [filters, sortField, sortDir, stockFilter]);
 
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) setVisibleCount(prev => Math.min(prev + BATCH_SIZE, sorted.length));
-    }, { rootMargin: '200px' });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [sorted.length, visibleCount]);
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -952,9 +942,16 @@ export default function Inventory() {
                 )}
               </div>
 
-              {/* ─── Lazy load sentinel + count ─── */}
+              {/* ─── Load more button + count ─── */}
               {visibleCount < sorted.length && (
-                <div ref={sentinelRef} className="py-4 text-center text-sm text-gray-400">Loading more...</div>
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => setVisibleCount(c => c + BATCH_SIZE)}
+                    className="px-4 py-2 text-sm text-terracotta-600 border border-terracotta-200 rounded-lg hover:bg-terracotta-50 transition-colors"
+                  >
+                    Load more ({sorted.length - visibleCount} remaining)
+                  </button>
+                </div>
               )}
               <div className="text-center text-sm text-gray-500 py-1">
                 Showing {visibleProducts.length} of {sorted.length} product{sorted.length !== 1 ? 's' : ''}

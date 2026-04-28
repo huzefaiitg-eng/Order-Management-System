@@ -120,7 +120,6 @@ export default function Customers() {
 
   // Lazy loading
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
-  const sentinelRef = useRef(null);
 
   const activeFilterCount = (appliedActive ? 1 : 0) + appliedOrderBuckets.length;
 
@@ -217,15 +216,6 @@ export default function Customers() {
 
   useEffect(() => { setVisibleCount(BATCH_SIZE); }, [query, appliedActive, appliedOrderBuckets, sortField, sortDir]);
 
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) setVisibleCount(prev => Math.min(prev + BATCH_SIZE, sorted.length));
-    }, { rootMargin: '200px' });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [sorted.length, visibleCount]);
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -490,7 +480,16 @@ export default function Customers() {
                 )}
               </div>
 
-              {visibleCount < sorted.length && <div ref={sentinelRef} className="py-4 text-center text-sm text-gray-400">Loading more...</div>}
+              {visibleCount < sorted.length && (
+                <div className="mt-4 text-center">
+                  <button
+                    onClick={() => setVisibleCount(c => c + BATCH_SIZE)}
+                    className="px-4 py-2 text-sm text-terracotta-600 border border-terracotta-200 rounded-lg hover:bg-terracotta-50 transition-colors"
+                  >
+                    Load more ({sorted.length - visibleCount} remaining)
+                  </button>
+                </div>
+              )}
               <div className="text-center text-sm text-gray-500 py-1">
                 Showing {visibleCustomers.length} of {sorted.length} customer{sorted.length !== 1 ? 's' : ''}
               </div>

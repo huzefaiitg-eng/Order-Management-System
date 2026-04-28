@@ -427,7 +427,6 @@ export default function Orders() {
 
   // Lazy loading
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
-  const sentinelRef = useRef(null);
 
   const totalApplied = appliedSources.length + appliedStatuses.length + appliedPayments.length;
 
@@ -508,16 +507,6 @@ export default function Orders() {
   // Reset visible count on filter/sort changes
   useEffect(() => { setVisibleCount(BATCH_SIZE); }, [filters, sortField, sortDir]);
 
-  // IntersectionObserver for lazy loading
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) setVisibleCount(prev => Math.min(prev + BATCH_SIZE, sortedOrders.length));
-    }, { rootMargin: '200px' });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [sortedOrders.length, visibleCount]);
 
   const togglePending = (setter, current, value) => {
     setter(current.includes(value) ? current.filter(v => v !== value) : [...current, value]);
@@ -813,9 +802,16 @@ export default function Orders() {
             )}
           </div>
 
-          {/* ─── Lazy load sentinel + count ─── */}
+          {/* ─── Load more button + count ─── */}
           {visibleCount < sortedOrders.length && (
-            <div ref={sentinelRef} className="py-4 text-center text-sm text-gray-400">Loading more...</div>
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => setVisibleCount(c => c + BATCH_SIZE)}
+                className="px-4 py-2 text-sm text-terracotta-600 border border-terracotta-200 rounded-lg hover:bg-terracotta-50 transition-colors"
+              >
+                Load more ({sortedOrders.length - visibleCount} remaining)
+              </button>
+            </div>
           )}
           <div className="text-center text-sm text-gray-500 py-1">
             Showing {visibleOrders.length} of {sortedOrders.length} order{sortedOrders.length !== 1 ? 's' : ''}
