@@ -49,7 +49,7 @@ function NavItem({ path, label, icon: Icon, collapsed, pathname, onClick }) {
       className={`flex items-center gap-3 rounded-lg text-sm font-medium transition-colors
         ${collapsed ? 'justify-center py-2.5 px-2' : 'px-3 py-2.5'}
         ${active
-          ? 'bg-terracotta-500/15 text-terracotta-400'
+          ? 'bg-terracotta-500/20 text-terracotta-200'
           : 'text-gray-400 hover:bg-white/10 hover:text-white'
         }`}
     >
