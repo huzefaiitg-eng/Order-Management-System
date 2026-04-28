@@ -1,250 +1,272 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Users, Package, User, LogOut, Menu, X, Settings, ChevronDown, Target } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import {
+  LayoutDashboard, ShoppingBag, Users, Package, Target,
+  ChevronLeft, ChevronRight, Menu, X, LogOut, User, Settings,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
 
-const omsNavItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/orders',    label: 'Orders',    icon: ShoppingBag },
-  { path: '/inventory', label: 'Inventory', icon: Package },
-];
-
-const crmNavItems = [
-  { path: '/leads',     label: 'Leads',     icon: Target },
-  { path: '/customers', label: 'Customers', icon: Users },
+// ── Navigation structure ──────────────────────────────────────────────────────
+const NAV_SECTIONS = [
+  {
+    label: 'Lead Management',
+    items: [
+      { path: '/leads',     label: 'Leads',     icon: Target },
+      { path: '/customers', label: 'Customers', icon: Users  },
+    ],
+  },
+  {
+    label: 'Order Management',
+    items: [
+      { path: '/dashboard', label: 'Sales Dashboard', icon: LayoutDashboard },
+      { path: '/orders',    label: 'Orders',          icon: ShoppingBag },
+      { path: '/inventory', label: 'Inventory',        icon: Package },
+    ],
+  },
 ];
 
 function getInitials(name) {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return parts[0][0].toUpperCase();
+  return parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : parts[0][0].toUpperCase();
 }
 
-export default function Navbar() {
+function isNavActive(pathname, path) {
+  return pathname.startsWith(path);
+}
+
+// ── Single nav link ───────────────────────────────────────────────────────────
+function NavItem({ path, label, icon: Icon, collapsed, pathname, onClick }) {
+  const active = isNavActive(pathname, path);
+  return (
+    <Link
+      to={path}
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      className={`flex items-center gap-3 rounded-lg text-sm font-medium transition-colors
+        ${collapsed ? 'justify-center py-2.5 px-2' : 'px-3 py-2.5'}
+        ${active
+          ? 'bg-terracotta-500/15 text-terracotta-400'
+          : 'text-gray-400 hover:bg-white/10 hover:text-white'
+        }`}
+    >
+      <Icon size={18} className="shrink-0" />
+      {!collapsed && <span>{label}</span>}
+    </Link>
+  );
+}
+
+// ── Avatar button + dropdown ──────────────────────────────────────────────────
+function AvatarMenu({ user, logout, dropdownDir = 'up-right' }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
   const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
 
-  const [avatarOpen, setAvatarOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
+  // Close on route change
+  useEffect(() => { setOpen(false); }, [pathname]);
 
-  const desktopAvatarRef = useRef(null);
-  const mobileAvatarRef = useRef(null);
-  const switcherRef = useRef(null);
-  const navRef = useRef(null);
-
-  const isCRM = pathname.startsWith('/leads') || pathname.startsWith('/customers');
-  const navItems = isCRM ? crmNavItems : omsNavItems;
-
-  // Close avatar dropdown on outside click
+  // Close on outside click
   useEffect(() => {
-    function handleClick(e) {
-      const insideDesktop = desktopAvatarRef.current?.contains(e.target);
-      const insideMobile = mobileAvatarRef.current?.contains(e.target);
-      if (!insideDesktop && !insideMobile) setAvatarOpen(false);
+    function handler(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Close product switcher on outside click
-  useEffect(() => {
-    function handleClick(e) {
-      if (switcherRef.current && !switcherRef.current.contains(e.target)) setSwitcherOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  // Close mobile menu on route change
-  useEffect(() => {
-    setMobileOpen(false);
-    setSwitcherOpen(false);
-  }, [pathname]);
+  // Dropdown position variants
+  const dropPos =
+    dropdownDir === 'up-right'  ? 'bottom-full left-0 mb-2'  :
+    dropdownDir === 'up-left'   ? 'bottom-full right-0 mb-2' :
+    dropdownDir === 'down-right'? 'top-full left-0 mt-2'     :
+    'top-full right-0 mt-2'; // down-left (mobile)
 
   return (
-    <nav ref={navRef} className="bg-brand-black border-b border-gray-800 sticky top-0 z-50">
-      {/* Top bar */}
-      <div className="flex items-center justify-between max-w-7xl mx-auto px-4 sm:px-6 py-3">
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-8 h-8 rounded-full bg-terracotta-500 text-white text-xs font-bold flex items-center justify-center hover:bg-terracotta-600 transition-colors shrink-0"
+      >
+        {getInitials(user?.name)}
+      </button>
 
-        {/* Logo / Product Switcher */}
-        <div className="relative" ref={switcherRef}>
-          <button
-            onClick={() => setSwitcherOpen(o => !o)}
-            className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+      {open && (
+        <div className={`absolute ${dropPos} w-52 bg-white rounded-xl border border-gray-200 shadow-xl py-2 z-[70]`}>
+          <div className="px-4 py-2 border-b border-gray-100">
+            <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
+            <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+          </div>
+          <Link
+            to="/profile"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
-            <img src={logo} alt="Logo" className="h-7 sm:h-8" />
-            <ChevronDown size={13} className="text-gray-500 mt-0.5" />
+            <User size={16} /> Profile
+          </Link>
+          <Link
+            to="/settings"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            <Settings size={16} /> Settings
+          </Link>
+          <button
+            onClick={logout}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
+          >
+            <LogOut size={16} /> Logout
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
-          {switcherOpen && (
-            <div className="absolute left-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50">
-              <button
-                onClick={() => { navigate('/leads'); setSwitcherOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left ${isCRM ? 'bg-terracotta-50' : ''}`}
-              >
-                <span className="text-xl">🎯</span>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Lead Management</p>
-                  <p className="text-xs text-gray-400">Leads · Customers</p>
-                </div>
-                {isCRM && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-terracotta-500" />}
-              </button>
-              <button
-                onClick={() => { navigate('/dashboard'); setSwitcherOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-left ${!isCRM ? 'bg-terracotta-50' : ''}`}
-              >
-                <span className="text-xl">📦</span>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Order Management</p>
-                  <p className="text-xs text-gray-400">Orders · Inventory</p>
-                </div>
-                {!isCRM && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-terracotta-500" />}
-              </button>
+// ── Shared nav sections list ──────────────────────────────────────────────────
+function NavSections({ collapsed, pathname, onItemClick }) {
+  return (
+    <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-5">
+      {NAV_SECTIONS.map((section, si) => (
+        <div key={section.label}>
+          {/* Section header */}
+          {!collapsed ? (
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest px-3 mb-1.5">
+              {section.label}
+            </p>
+          ) : (
+            si > 0 && <div className="border-t border-gray-800 mx-3 my-2" />
+          )}
+          {/* Items */}
+          <div className="space-y-0.5">
+            {section.items.map(item => (
+              <NavItem
+                key={item.path}
+                {...item}
+                collapsed={collapsed}
+                pathname={pathname}
+                onClick={onItemClick}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+// ── Main Navbar component ─────────────────────────────────────────────────────
+export default function Navbar() {
+  const { user, logout } = useAuth();
+  const { pathname } = useLocation();
+
+  // Sidebar collapse (desktop) — persisted in localStorage
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem('sidebar_collapsed') === 'true'
+  );
+
+  // Mobile drawer open state
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close mobile drawer on route change
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  function toggleCollapse() {
+    setCollapsed(c => {
+      const next = !c;
+      localStorage.setItem('sidebar_collapsed', String(next));
+      return next;
+    });
+  }
+
+  return (
+    <>
+      {/* ── DESKTOP SIDEBAR (hidden on mobile) ───────────────────────── */}
+      <aside
+        className={`hidden md:flex flex-col h-screen bg-brand-black border-r border-gray-800 shrink-0 transition-all duration-200
+          ${collapsed ? 'w-16' : 'w-56'}`}
+      >
+        {/* Logo + collapse toggle */}
+        <div
+          className={`flex items-center h-14 shrink-0 border-b border-gray-800
+            ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}
+        >
+          {!collapsed && (
+            <img src={logo} alt="Bombay Stride" className="h-7" />
+          )}
+          <button
+            onClick={toggleCollapse}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          </button>
+        </div>
+
+        {/* Nav sections */}
+        <NavSections collapsed={collapsed} pathname={pathname} onItemClick={null} />
+
+        {/* User section */}
+        <div className={`border-t border-gray-800 p-3 shrink-0 ${collapsed ? 'flex justify-center' : ''}`}>
+          {collapsed ? (
+            <AvatarMenu user={user} logout={logout} dropdownDir="up-right" />
+          ) : (
+            <div className="flex items-center gap-2.5">
+              <AvatarMenu user={user} logout={logout} dropdownDir="up-right" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate leading-tight">{user?.name}</p>
+                <p className="text-xs text-gray-500 truncate leading-tight mt-0.5">{user?.email}</p>
+              </div>
             </div>
           )}
         </div>
+      </aside>
 
-        {/* Desktop nav links */}
-        <div className="hidden md:flex items-center gap-1">
-          {navItems.map(({ path, label, icon: Icon }) => {
-            const isActive = isCRM
-              ? pathname.startsWith(path)
-              : pathname === path;
-            return (
-              <Link
-                key={path}
-                to={path}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-terracotta-500/15 text-terracotta-500'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <Icon size={18} />
-                {label}
-              </Link>
-            );
-          })}
+      {/* ── MOBILE TOP BAR (hidden on desktop) ───────────────────────── */}
+      <header className="md:hidden flex items-center justify-between h-14 bg-brand-black border-b border-gray-800 px-4 shrink-0">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="p-1 text-gray-400 hover:text-white transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu size={22} />
+        </button>
+        <img src={logo} alt="Bombay Stride" className="h-7" />
+        <AvatarMenu user={user} logout={logout} dropdownDir="down-left" />
+      </header>
 
-          {/* Desktop avatar */}
-          <div className="relative ml-4" ref={desktopAvatarRef}>
-            <button
-              onClick={() => setAvatarOpen(!avatarOpen)}
-              className="w-9 h-9 rounded-full bg-terracotta-500 text-white text-sm font-bold flex items-center justify-center hover:bg-terracotta-600 transition-colors"
-            >
-              {getInitials(user?.name)}
-            </button>
-
-            {avatarOpen && (
-              <div className="absolute right-0 top-12 w-56 bg-white rounded-xl border border-gray-200 shadow-lg py-2 z-50">
-                <div className="px-4 py-2 border-b border-gray-100">
-                  <p className="text-sm font-medium text-gray-900 truncate">{user?.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-                </div>
-                <Link
-                  to="/profile"
-                  onClick={() => setAvatarOpen(false)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <User size={16} />
-                  Profile
-                </Link>
-                <Link
-                  to="/settings"
-                  onClick={() => setAvatarOpen(false)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Settings size={16} />
-                  Settings
-                </Link>
-                <button
-                  onClick={logout}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
-                >
-                  <LogOut size={16} />
-                  Logout
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Mobile: avatar + hamburger */}
-        <div className="flex items-center gap-3 md:hidden">
-          <div className="relative" ref={mobileAvatarRef}>
-            <button
-              onClick={() => setAvatarOpen(!avatarOpen)}
-              className="w-8 h-8 rounded-full bg-terracotta-500 text-white text-xs font-bold flex items-center justify-center"
-            >
-              {getInitials(user?.name)}
-            </button>
-            {avatarOpen && (
-              <div className="absolute right-0 top-11 w-52 bg-white rounded-xl border border-gray-200 shadow-lg py-2 z-50">
-                <div className="px-4 py-2 border-b border-gray-100">
-                  <p className="text-sm font-medium text-gray-900 truncate">{user?.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-                </div>
-                <Link
-                  to="/profile"
-                  onClick={() => { setAvatarOpen(false); setMobileOpen(false); }}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <User size={16} />
-                  Profile
-                </Link>
-                <Link
-                  to="/settings"
-                  onClick={() => { setAvatarOpen(false); setMobileOpen(false); }}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Settings size={16} />
-                  Settings
-                </Link>
-                <button
-                  onClick={logout}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
-                >
-                  <LogOut size={16} />
-                  Logout
-                </button>
-              </div>
-            )}
-          </div>
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="text-gray-300 hover:text-white p-1"
-          >
-            {mobileOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile slide-down menu */}
+      {/* ── MOBILE DRAWER (fixed overlay) ────────────────────────────── */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-gray-800 px-4 py-3 space-y-1">
-          {navItems.map(({ path, label, icon: Icon }) => {
-            const isActive = isCRM ? pathname.startsWith(path) : pathname === path;
-            return (
-              <Link
-                key={path}
-                to={path}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-terracotta-500/15 text-terracotta-500'
-                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                }`}
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setMobileOpen(false)}
+          />
+          {/* Drawer panel */}
+          <div className="relative w-64 bg-brand-black flex flex-col shadow-2xl">
+            {/* Drawer header */}
+            <div className="flex items-center justify-between h-14 px-4 border-b border-gray-800 shrink-0">
+              <img src={logo} alt="Bombay Stride" className="h-7" />
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="p-1 text-gray-400 hover:text-white transition-colors"
+                aria-label="Close menu"
               >
-                <Icon size={18} />
-                {label}
-              </Link>
-            );
-          })}
+                <X size={22} />
+              </button>
+            </div>
+            {/* Nav sections */}
+            <NavSections
+              collapsed={false}
+              pathname={pathname}
+              onItemClick={() => setMobileOpen(false)}
+            />
+          </div>
         </div>
       )}
-    </nav>
+    </>
   );
 }

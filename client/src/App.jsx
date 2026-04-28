@@ -51,10 +51,13 @@ class ErrorBoundary extends Component {
 
 function AppLayout() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    // flex-col on mobile (topbar above content), flex-row on desktop (sidebar beside content)
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden">
       <Navbar />
-      <main className="max-w-7xl mx-auto">
-        <Outlet />
+      <main className="flex-1 overflow-y-auto bg-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
