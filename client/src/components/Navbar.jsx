@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, Users, Package, Target,
-  ChevronLeft, Menu, X, LogOut, User, Settings,
+  ChevronLeft, ChevronRight, Menu, X, LogOut, User, Settings,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
@@ -190,18 +190,27 @@ export default function Navbar() {
       >
         {/* Logo + collapse toggle */}
         <div
-          className={`flex items-center h-14 shrink-0 border-b border-gray-800
-            ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}
+          className={`flex shrink-0 border-b border-gray-800
+            ${collapsed ? 'flex-col items-center gap-1.5 py-2.5' : 'h-14 items-center justify-between px-4'}`}
         >
           {collapsed ? (
-            // Collapsed: favicon-as-toggle (click to expand)
-            <button
-              onClick={toggleCollapse}
-              title="Expand sidebar"
-              className="rounded-lg hover:opacity-80 transition-opacity"
-            >
-              <img src="/favicon.png" alt="Bombay Stride" className="h-8 w-8" />
-            </button>
+            // Collapsed: favicon (top) + chevron expand indicator (bottom). Both expand on click.
+            <>
+              <button
+                onClick={toggleCollapse}
+                title="Expand sidebar"
+                className="rounded-lg hover:opacity-80 transition-opacity"
+              >
+                <img src="/favicon.png" alt="Bombay Stride" className="h-7 w-7" />
+              </button>
+              <button
+                onClick={toggleCollapse}
+                title="Expand sidebar"
+                className="p-0.5 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </>
           ) : (
             // Expanded: full logo + chevron collapse button
             <>
