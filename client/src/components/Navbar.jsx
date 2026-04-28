@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, Users, Package, Target,
-  ChevronLeft, ChevronRight, Menu, X, LogOut, User, Settings,
+  ChevronLeft, Menu, X, LogOut, User, Settings,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
@@ -193,16 +193,28 @@ export default function Navbar() {
           className={`flex items-center h-14 shrink-0 border-b border-gray-800
             ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}
         >
-          {!collapsed && (
-            <img src={logo} alt="Bombay Stride" className="h-7" />
+          {collapsed ? (
+            // Collapsed: favicon-as-toggle (click to expand)
+            <button
+              onClick={toggleCollapse}
+              title="Expand sidebar"
+              className="rounded-lg hover:opacity-80 transition-opacity"
+            >
+              <img src="/favicon.png" alt="Bombay Stride" className="h-8 w-8" />
+            </button>
+          ) : (
+            // Expanded: full logo + chevron collapse button
+            <>
+              <img src={logo} alt="Bombay Stride" className="h-7" />
+              <button
+                onClick={toggleCollapse}
+                title="Collapse sidebar"
+                className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <ChevronLeft size={16} />
+              </button>
+            </>
           )}
-          <button
-            onClick={toggleCollapse}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          </button>
         </div>
 
         {/* Nav sections */}
