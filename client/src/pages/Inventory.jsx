@@ -311,7 +311,9 @@ export default function Inventory() {
   }, [insightsData, allLeads]);
 
   useEffect(() => {
-    fetchInventorySummary().then(setSummary).catch(() => {});
+    fetchInventorySummary().then(setSummary).catch(err => {
+      console.error('Inventory summary fetch failed:', err);
+    });
   }, []);
 
   // Close mobile sort dropdown on outside click
@@ -464,19 +466,39 @@ export default function Inventory() {
       {/* ─── Insights Tab ─── */}
       {activeTab === 'insights' && (
         <>
-          {/* KPI Cards */}
-          {summary && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <KpiCard title="Total Products" value={summary.totalProducts} icon={Package} color="terracotta" />
-              <KpiCard title="Inventory Value" value={formatCurrency(summary.totalInventoryValue)} icon={IndianRupee} color="green" />
-              <Link to="/inventory?tab=details&stockFilter=lowStock" className="block h-full">
-              <KpiCard title="Low Stock" value={summary.lowStockCount} icon={AlertTriangle} color="amber" clickable />
+          {/* KPI Cards — always render so they don't disappear if summary fetch is slow/fails */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <KpiCard
+              title="Total Products"
+              value={summary ? summary.totalProducts : '—'}
+              icon={Package}
+              color="terracotta"
+            />
+            <KpiCard
+              title="Inventory Value"
+              value={summary ? formatCurrency(summary.totalInventoryValue) : '—'}
+              icon={IndianRupee}
+              color="green"
+            />
+            <Link to="/inventory?tab=details&stockFilter=lowStock" className="block h-full">
+              <KpiCard
+                title="Low Stock"
+                value={summary ? summary.lowStockCount : '—'}
+                icon={AlertTriangle}
+                color="amber"
+                clickable
+              />
             </Link>
             <Link to="/inventory?tab=details&stockFilter=outOfStock" className="block h-full">
-              <KpiCard title="Out of Stock" value={summary.outOfStockCount} icon={PackageX} color="red" clickable />
+              <KpiCard
+                title="Out of Stock"
+                value={summary ? summary.outOfStockCount : '—'}
+                icon={PackageX}
+                color="red"
+                clickable
+              />
             </Link>
-            </div>
-          )}
+          </div>
 
           {insightsLoading && <Loader />}
           {insightsError && <ErrorMessage message={insightsError} />}
