@@ -190,29 +190,21 @@ export default function Navbar() {
       >
         {/* Logo + collapse toggle */}
         <div
-          className={`flex shrink-0 border-b border-gray-800
-            ${collapsed ? 'flex-col items-center gap-1.5 py-2.5' : 'h-14 items-center justify-between px-4'}`}
+          className={`flex items-center h-14 shrink-0 border-b border-gray-800
+            ${collapsed ? 'justify-center gap-1 px-1' : 'justify-between px-4'}`}
         >
           {collapsed ? (
-            // Collapsed: favicon (top) + chevron expand indicator (bottom). Both expand on click.
-            <>
-              <button
-                onClick={toggleCollapse}
-                title="Expand sidebar"
-                className="rounded-lg hover:opacity-80 transition-opacity"
-              >
-                <img src="/favicon.png" alt="Bombay Stride" className="h-7 w-7" />
-              </button>
-              <button
-                onClick={toggleCollapse}
-                title="Expand sidebar"
-                className="p-0.5 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <ChevronRight size={14} />
-              </button>
-            </>
+            // Collapsed: favicon + chevron-right indicator side-by-side. Both expand on click.
+            <button
+              onClick={toggleCollapse}
+              title="Expand sidebar"
+              className="flex items-center gap-0.5 rounded-lg p-1 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <img src="/favicon.png" alt="Bombay Stride" className="h-6 w-6" />
+              <ChevronRight size={14} />
+            </button>
           ) : (
-            // Expanded: full logo + chevron collapse button
+            // Expanded: full logo + chevron-left collapse button
             <>
               <img src={logo} alt="Bombay Stride" className="h-7" />
               <button
