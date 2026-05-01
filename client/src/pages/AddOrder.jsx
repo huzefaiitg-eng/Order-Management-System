@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingBag, Plus, X, CheckCircle, FileText, Eye } from 'lucide-react';
+import { ShoppingBag, Plus, X, CheckCircle, FileText, Eye, Tag } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   addOrder, fetchCustomers, fetchInventory, addCustomer, addProduct,
@@ -330,17 +330,6 @@ export default function AddOrder() {
                   {PAYMENT_MODES.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Discount (optional)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={form.discount}
-                  onChange={e => setForm({ ...form, discount: parseFloat(e.target.value) || 0 })}
-                  className={inputClass}
-                  placeholder="0"
-                />
-              </div>
             </div>
           </div>
 
@@ -398,6 +387,33 @@ export default function AddOrder() {
               hasInventoryAccess={hasInventoryAccess}
               sellingPriceLocked={false}
             />
+          </div>
+
+          {/* Discount */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Tag size={16} className="text-terracotta-600" />
+              <h2 className="text-sm font-semibold text-gray-900">Discount</h2>
+              <span className="text-[11px] text-gray-400 font-normal">(optional, applied at order level)</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Discount amount (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.discount}
+                  onChange={e => setForm({ ...form, discount: parseFloat(e.target.value) || 0 })}
+                  className={inputClass}
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex items-end text-xs text-gray-500">
+                {discount > 0 && subtotal > 0
+                  ? <span>That&apos;s a {((discount / subtotal) * 100).toFixed(1)}% discount on a subtotal of {formatCurrency(subtotal)}.</span>
+                  : <span>Leave 0 if no discount applies.</span>}
+              </div>
+            </div>
           </div>
 
           {/* Totals */}
