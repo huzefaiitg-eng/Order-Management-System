@@ -88,18 +88,21 @@ router.post('/', async (req, res) => {
     const { sheetId } = req.user;
     const { orderFrom, customerName, customerPhone, customerAddress, productLines, pricePaid, modeOfPayment, discount } = req.body;
 
-    // Support both productLines array (multi-product) and legacy single-product fields
-    let productOrdered, productCost, quantityOrdered, sellingPrice;
+    // Support both productLines array (multi-product) and legacy single-product fields.
+    // articleId per line — empty string for custom (non-inventory) items.
+    let productOrdered, productCost, quantityOrdered, sellingPrice, articleIds;
     if (productLines && Array.isArray(productLines) && productLines.length > 0) {
       productOrdered = productLines.map(l => l.productName);
-      productCost = productLines.map(l => l.unitCost || 0);
+      productCost    = productLines.map(l => l.unitCost ?? l.productCost ?? 0);
       quantityOrdered = productLines.map(l => l.quantity || 1);
-      sellingPrice = productLines.map(l => l.unitSellingPrice || 0);
+      sellingPrice   = productLines.map(l => l.unitSellingPrice ?? l.sellingPrice ?? 0);
+      articleIds     = productLines.map(l => l.articleId || '');
     } else {
       productOrdered = req.body.productOrdered;
       productCost = req.body.productCost || 0;
       quantityOrdered = req.body.quantityOrdered || 1;
       sellingPrice = req.body.sellingPrice || 0;
+      articleIds = req.body.articleIds || '';
     }
 
     const productCheck = Array.isArray(productOrdered) ? productOrdered[0] : productOrdered;
@@ -118,6 +121,7 @@ router.post('/', async (req, res) => {
       pricePaid: pricePaid || 0,
       sellingPrice,
       discount: parseFloat(discount) || 0,
+      articleIds,
     });
 
     await addAuditEntry(sheetId, { orderRowIndex: result.rowIndex, previousStatus: '', newStatus: 'Pending' });
@@ -138,7 +142,8 @@ router.post('/', async (req, res) => {
       console.warn('Order creation: customer auto-create skipped:', err.message);
     }
 
-    // Stock side-effect: decrement instockQuantity for every product in this order
+    // Stock side-effect: decrement instockQuantity for inventory products only.
+    // Custom (non-inventory) lines have empty articleId — skip them.
     try {
       const inv = await getAllInventory(sheetId);
       const lines = result.productLines || [];
@@ -146,8 +151,11 @@ router.post('/', async (req, res) => {
         if (!line.productName) continue;
         const qty = parseInt(line.quantity) || 0;
         if (qty <= 0) continue;
-        const product = inv.find(p => p.productName === line.productName);
-        if (!product) continue;
+        // articleId on the line wins; fall back to name-match for legacy orders without it.
+        const product = line.articleId
+          ? inv.find(p => p.articleId === line.articleId)
+          : inv.find(p => p.productName === line.productName);
+        if (!product) continue; // custom line OR archived inventory item — no stock op
         await adjustStock(sheetId, product.articleId, {
           delta: -qty,
           reason: `Order ${result.orderNumber || `#${result.rowIndex}`} placed (row ${result.rowIndex})`,
@@ -208,7 +216,11 @@ router.patch('/:rowIndex', async (req, res) => {
             if (!line.productName) continue;
             const qty = parseInt(line.quantity) || 0;
             if (qty <= 0) continue;
-            const product = inv.find(p => p.productName === line.productName);
+            // articleId on the line wins; fall back to name-match for legacy orders.
+            // Custom items (no articleId, no name match) are skipped — no stock to restore/re-consume.
+            const product = line.articleId
+              ? inv.find(p => p.articleId === line.articleId)
+              : inv.find(p => p.productName === line.productName);
             if (!product) continue;
             const delta = enteringRestore ? +qty : -qty;
             const changeType = enteringRestore ? 'order-restored' : 'order-reactivated';

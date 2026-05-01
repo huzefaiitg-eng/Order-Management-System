@@ -30,11 +30,12 @@ A web application for managing shoe orders coming from multiple sales channels (
 | Customer Phone Number | Contact number |
 | Customer Address | Delivery address |
 | Mode of Payment | COD, UPI, Bank Transfer, Credit/Debit Card, Wallet, EMI |
-| Product Ordered | Shoe product name/SKU (links to Inventory master) |
-| Product Cost | Cost price of the product |
-| Quantity Ordered | Number of units ordered |
-| Price Paid by Customer | Selling price / amount paid |
+| Product Ordered | Pipe-separated product names per line item (links to Inventory master when an Article ID is present in the corresponding column Q slot) |
+| Product Cost | Pipe-separated cost prices per line item |
+| Quantity Ordered | Pipe-separated quantities per line item |
+| Price Paid by Customer | Total price paid (sum across all lines minus discount) |
 | Order Status | Current status of the order |
+| Article IDs (col Q) | Pipe-separated article IDs aligned 1:1 with Product Ordered. Empty slot = custom (non-inventory) line item — no stock decrement on delivery, no inventory enrichment on read. |
 
 ### Tab: `Customers`
 | Column | Description |
@@ -78,7 +79,7 @@ A web application for managing shoe orders coming from multiple sales channels (
 | Customer Name | Full name of the potential customer |
 | Customer Phone | Contact number — used to link/create a Customer record |
 | Customer Email | Optional email address |
-| Products Interested | Comma-separated product names (links to Inventory) |
+| Products Interested | JSON array `[{productName, productCost, sellingPrice, quantity, articleId}, ...]`. Legacy comma-separated names auto-parsed on read for backward compat. `articleId` empty = custom (non-inventory) item; otherwise links to an Inventory product. |
 | Lead Status | New Lead / Contacted / Interested / Follow-up / Converted / Lost |
 | Lead Source | WhatsApp / Instagram / Facebook / Referral / Walk-in/Offline |
 | Follow-up Date | Optional scheduled follow-up date (DD/MM/YYYY) |
@@ -130,11 +131,13 @@ Branch statuses: `Returned`, `Cancelled`, `Refunded`
 - Inline status update (dropdown to change order status — writes back to Google Sheet)
 - Profit column (Price Paid - Product Cost) with color coding (green for profit, red for loss)
 - Orders enriched with customer data from Customers master and product data from Inventory master
-- **Add Order** button — opens modal form to manually create an order:
-  - Date (default today DD/MM/YYYY), Source (dropdown including "Manual"), Customer (searchable from active customers or add new inline), Product (searchable from active inventory or add new inline), Payment mode, Quantity
-  - **Selling price per line is read-only** — inventory selling price is the authoritative max. Users pick product + quantity only. Discounts happen at the order-level Discount field (not per line).
-  - Default status: Pending
-  - Logs initial audit entry on creation
+- **Add Order** button — navigates to the dedicated full-page route `/orders/new`:
+  - Date (default today DD/MM/YYYY), Source (dropdown including "Manual"), Customer (searchable from active customers or add new inline), Payment mode, Discount (order-level)
+  - Each product line uses the shared `<ProductLineEditor />` component which supports two modes per line:
+    - **From Inventory** — searchable picker; cost / selling price auto-fill from the chosen product, `articleId` recorded on the line
+    - **Custom** — free-form Product Name + Cost + Selling Price (no inventory link, no stock decrement on delivery, profit still computed per line)
+  - Multiple lines per order; each line has its own type. The toggle is hidden for users without Inventory Access — they can only add Custom lines.
+  - Default status: Pending; logs initial audit entry on creation.
 
 ### 3. Insights (embedded in each page — no standalone Insights page)
 
@@ -168,6 +171,8 @@ Each of Orders, Customers, and Inventory has **two tabs**: **Insights** (default
 - Customer order history (other orders from the same customer)
 
 ### 5. Inventory Page
+> **Optional module**: gated by the `Inventory Access` column in the User Access sheet. Users without `Yes` access see a marketing/upsell page (`InventoryUpsell.jsx`) at every `/inventory*` route — explaining what the module does, listing key features (stock alerts, KPIs, audit trail, etc.), with a `mailto:huzefa.iitg@gmail.com` CTA for requesting access. Backend returns 403 on `/api/inventory/*` for users without access (defense-in-depth).
+
 Two tabs — **Insights** (default) and **All Products**:
 - **Insights tab**: 4 KPI summary cards (Total Products, Inventory Value, Low Stock, Out of Stock — last two clickable, link to filtered All Products view) + 5 insight sections (see §3)
 - **All Products tab**: searchable, filterable product card grid (by category, sub-category) — Active products only; sort dropdown (Name A–Z, Low/More stock first, Price, Most sold); lazy loading (25 per batch). If navigated from Dashboard with `?stockFilter=lowStock|outOfStock`, forces this tab and shows a filter badge.
@@ -308,6 +313,7 @@ server/
 | Website | Business website |
 | Password | Login password (plain text) |
 | Order Sheet Link | Full Google Sheets URL for this user's order data |
+| Inventory Access | `Yes` enables the Inventory module for this user; `No` or blank disables. Hard-blocked at the API level (`/api/inventory/*` returns 403) and at the route level (frontend renders an upsell/marketing page). Admin-controlled — users cannot self-toggle. |
 
 ### Auth API Endpoints
 - `POST /api/auth/login` — Validate credentials, return JWT token + user profile (public)
@@ -405,8 +411,8 @@ WhatsApp · Instagram · Facebook · Referral · Walk-in/Offline
 
 ### Key Behaviours
 - **Auto-create customer**: When a lead is saved, the API checks if a Customer with the same phone number exists. If not, a new Customer record is created automatically in the Customers sheet.
-- **Multi-product interest**: Stored as a comma-separated string in column F (same pattern as category multi-select). Displayed as indigo pills in the UI.
-- **Conversion flow**: When a lead status is set to Converted, a "Create Order" button appears in LeadDetail. Clicking it stores prefill data in `sessionStorage` (`lead_order_prefill` key) and navigates to `/orders?tab=details&openAdd=1`. The Orders page detects this param on mount, reads the prefill, and auto-opens the AddOrderModal pre-filled with the lead's customer name, phone, and first product of interest.
+- **Multi-product interest with financials**: Stored as a JSON array in column F: `[{productName, productCost, sellingPrice, quantity, articleId}, ...]`. Each line carries its own cost, selling price, and quantity. `articleId` empty = custom (non-inventory) line; otherwise links to an Inventory product. Legacy comma-separated names are auto-parsed on read for backward compatibility.
+- **Conversion flow**: When a lead status is set to Converted, a "Create Order" button appears in LeadDetail. Clicking it navigates to `/orders/new` and forwards the full `productLines` array (with cost/price/qty/articleId per line) and customer info via `location.state.prefill`. AddOrder reads the prefill on mount and pre-populates every field.
 - **Linked order**: After creating the order, the `convertedOrderRow` field on the lead can be updated (via PATCH) to link back to the OMS order row index.
 - **Kanban board**: The List tab has a Table/Kanban toggle. Dragging a card between columns fires a PATCH to update lead status. HTML5 Drag and Drop API — no external library.
 - **Follow-up overdue highlight**: If `followUpDate` (DD/MM/YYYY) is before today, the date is shown in red.
@@ -416,11 +422,16 @@ WhatsApp · Instagram · Facebook · Referral · Walk-in/Offline
 #### Leads page (`/leads`)
 - `?tab=insights` (default): 4 KPI cards (Total Leads, Conversion Rate, Pipeline Value, Follow-ups Due Today) + pipeline funnel chart (horizontal BarChart) + leads by source chart + "Follow-ups Due Today" insight section
 - `?tab=list`: filter bar (search + status dropdown + source dropdown) + Table/Kanban toggle + lazy-load table (25 per batch) or 6-column Kanban board
+- "+ Add Lead" navigates to the dedicated full-page route `/leads/new` (replaces the legacy modal). Same `<ProductLineEditor />` as Add Order — supports inventory + custom mix.
+
+#### Add Lead page (`/leads/new`)
+- Full-page form with Lead Info (status / source / budget), Customer (search or add new), Products of Interest (`<ProductLineEditor />`), and Notes sections.
+- Saves via `POST /api/leads` with `productLines` array. Each line includes cost / selling price / qty / articleId so the financials carry forward intact when the lead converts to an order.
 
 #### Lead Detail page (`/leads/:leadId`)
 - Header: customer name, phone, email, Lead ID chip, status badge (inline-editable via quick-stage buttons)
 - Stats cards: Budget · Follow-up Date · Status · Linked Order
-- Products Interested section (pill list)
+- Products Interested section: rich table (Product · Type pill · Cost · Price · Qty · Subtotal). Inventory lines show an "Inventory" pill; custom lines show a "Custom" pill. Editing the lead swaps to `<ProductLineEditor />` for full per-line edits.
 - Notes section
 - Conversion section: shown when status = Converted; shows "Create Order" button (or "View Order" link if already converted)
 - Quick status change buttons: move lead to any other status with one click

@@ -47,6 +47,7 @@ const COLUMN_MAP = {
   discount: 13,
   paymentStatus: 14,  // Column O — 'Unpaid' | 'Partial Paid' | 'Fully Paid'
   paidAmount: 15,     // Column P — amount received (used for Partial Paid)
+  articleIds: 16,     // Column Q — pipe-separated articleIds matching productLines (empty = custom)
 };
 
 function rowToOrder(row, rowIndex) {
@@ -54,6 +55,8 @@ function rowToOrder(row, rowIndex) {
   const costsRaw = (row[COLUMN_MAP.productCost] || '0').split('|').map(s => parseFloat(s.trim()) || 0);
   const qtysRaw = (row[COLUMN_MAP.quantityOrdered] || '1').split('|').map(s => parseInt(s.trim()) || 1);
   const sellingPricesRaw = (row[COLUMN_MAP.sellingPrice] || '').split('|').map(s => parseFloat(s.trim()) || 0);
+  // articleIds (column Q) — empty string = custom (non-inventory) item. May not exist on legacy orders.
+  const articleIdsRaw = (row[COLUMN_MAP.articleIds] || '').split('|').map(s => s.trim());
   const pricePaid = parseFloat(row[COLUMN_MAP.pricePaid]) || 0;
   const discount = parseFloat(row[COLUMN_MAP.discount]) || 0;
   const totalCost = costsRaw.reduce((sum, c, i) => sum + c * (qtysRaw[i] || 1), 0);
@@ -87,9 +90,10 @@ function rowToOrder(row, rowIndex) {
       unitCost: costsRaw[i] || 0,
       unitSellingPrice: sellingPricesRaw[i] || costsRaw[i] || 0,
       quantity: qtysRaw[i] || 1,
+      articleId: articleIdsRaw[i] || '',  // empty = custom (non-inventory) item
       lineTotal: (costsRaw[i] || 0) * (qtysRaw[i] || 1),
       sellingLineTotal: (sellingPricesRaw[i] || costsRaw[i] || 0) * (qtysRaw[i] || 1),
-    })) : [{ productName: '', unitCost: 0, unitSellingPrice: 0, quantity: 1, lineTotal: 0, sellingLineTotal: 0 }],
+    })) : [{ productName: '', unitCost: 0, unitSellingPrice: 0, quantity: 1, articleId: '', lineTotal: 0, sellingLineTotal: 0 }],
     profit: pricePaid - totalCost,
   };
 }
@@ -98,7 +102,7 @@ async function getAllOrders(sheetId) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'Orders!A2:P',
+    range: 'Orders!A2:Q',
   });
 
   const rows = response.data.values || [];
@@ -367,7 +371,7 @@ async function updateProduct(sheetId, articleId, updates) {
   return { ...product, ...updates };
 }
 
-async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerPhone, customerAddress, modeOfPayment, productOrdered, productCost, quantityOrdered, pricePaid, sellingPrice, discount }) {
+async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerPhone, customerAddress, modeOfPayment, productOrdered, productCost, quantityOrdered, pricePaid, sellingPrice, discount, articleIds }) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const orderNumber = 'INV-' + Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 
@@ -375,14 +379,16 @@ async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerP
   const costStr = Array.isArray(productCost) ? productCost.join(' | ') : String(productCost);
   const qtyStr = Array.isArray(quantityOrdered) ? quantityOrdered.join(' | ') : String(quantityOrdered);
   const sellingPriceStr = Array.isArray(sellingPrice) ? sellingPrice.join(' | ') : String(sellingPrice || 0);
+  // articleIds aligns 1:1 with productLines. Empty string = custom (non-inventory) item.
+  const articleIdsStr = Array.isArray(articleIds) ? articleIds.map(a => a || '').join(' | ') : (articleIds || '');
 
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: sheetId,
-    range: 'Orders!A:P',
+    range: 'Orders!A:Q',
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[orderFrom, orderDate, customerName, customerPhone, customerAddress || '', modeOfPayment, productStr, costStr, qtyStr, pricePaid, 'Pending', orderNumber, sellingPriceStr, discount || 0, 'Unpaid', 0]],
+      values: [[orderFrom, orderDate, customerName, customerPhone, customerAddress || '', modeOfPayment, productStr, costStr, qtyStr, pricePaid, 'Pending', orderNumber, sellingPriceStr, discount || 0, 'Unpaid', 0, articleIdsStr]],
     },
   });
 
@@ -395,6 +401,7 @@ async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerP
   const costsArr = Array.isArray(productCost) ? productCost.map(Number) : [parseFloat(productCost) || 0];
   const qtysArr = Array.isArray(quantityOrdered) ? quantityOrdered.map(Number) : [parseInt(quantityOrdered) || 1];
   const sellingArr = Array.isArray(sellingPrice) ? sellingPrice.map(Number) : [parseFloat(sellingPrice) || 0];
+  const articleIdsArr = Array.isArray(articleIds) ? articleIds.map(a => a || '') : [(articleIds || '')];
   const totalCost = costsArr.reduce((sum, c, i) => sum + c * (qtysArr[i] || 1), 0);
   const subtotal = sellingArr.reduce((sum, sp, i) => sum + sp * (qtysArr[i] || 1), 0);
   const discountVal = parseFloat(discount) || 0;
@@ -422,6 +429,7 @@ async function addOrder(sheetId, { orderFrom, orderDate, customerName, customerP
       unitCost: costsArr[i] || 0,
       unitSellingPrice: sellingArr[i] || 0,
       quantity: qtysArr[i] || 1,
+      articleId: articleIdsArr[i] || '',
       lineTotal: (costsArr[i] || 0) * (qtysArr[i] || 1),
       sellingLineTotal: (sellingArr[i] || 0) * (qtysArr[i] || 1),
     })),
@@ -565,7 +573,7 @@ async function getOrderByRowIndex(sheetId, rowIndex) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: `Orders!A${rowIndex}:N${rowIndex}`,
+    range: `Orders!A${rowIndex}:Q${rowIndex}`,
   });
   const row = (response.data.values || [])[0];
   if (!row) return null;

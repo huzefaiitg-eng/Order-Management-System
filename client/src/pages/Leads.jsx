@@ -68,273 +68,6 @@ function isFollowUpOverdue(followUpDate) {
   return d < new Date(new Date().setHours(0, 0, 0, 0));
 }
 
-// ── AddLeadModal ──────────────────────────────────────────────
-
-const EMPTY_FORM = {
-  customerName: '', customerPhone: '', customerEmail: '',
-  selectedProducts: [], leadStatus: 'New Lead', leadSource: '',
-  budget: '', notes: '',
-};
-
-const EMPTY_NEW_CUSTOMER = { customerName: '', customerPhone: '', customerAddress: '', customerEmail: '' };
-
-function AddLeadModal({ onClose, onSaved }) {
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [products, setProducts] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [addingNewCustomer, setAddingNewCustomer] = useState(false);
-  const [newCustomer, setNewCustomer] = useState(EMPTY_NEW_CUSTOMER);
-  const [savingCustomer, setSavingCustomer] = useState(false);
-
-  useEffect(() => {
-    fetchInventory({ status: 'Active' }).then(setProducts).catch(() => {});
-    fetchCustomers('', 'Active').then(setCustomers).catch(() => {});
-  }, []);
-
-  function set(field, value) {
-    setForm(f => ({ ...f, [field]: value }));
-  }
-
-  function handleCustomerSelect(c) {
-    setForm(f => ({
-      ...f,
-      customerName: c.customerName,
-      customerPhone: c.customerPhone,
-      customerEmail: c.customerEmail || '',
-    }));
-  }
-
-  async function handleCreateNewCustomer() {
-    if (!newCustomer.customerName.trim() || !newCustomer.customerPhone.trim()) {
-      setError('Customer name and phone are required.');
-      return;
-    }
-    setSavingCustomer(true);
-    setError('');
-    try {
-      const created = await addCustomer(newCustomer);
-      setCustomers(prev => [...prev, created]);
-      handleCustomerSelect(created);
-      setAddingNewCustomer(false);
-      setNewCustomer(EMPTY_NEW_CUSTOMER);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSavingCustomer(false);
-    }
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!form.customerName.trim() || !form.customerPhone.trim()) {
-      setError('Customer name and phone are required.');
-      return;
-    }
-    if (form.selectedProducts.length === 0) {
-      setError('Please select at least one product of interest.');
-      return;
-    }
-    setSaving(true);
-    setError('');
-    try {
-      const saved = await addLead({
-        customerName: form.customerName.trim(),
-        customerPhone: form.customerPhone.trim(),
-        customerEmail: form.customerEmail.trim(),
-        productsInterested: form.selectedProducts.map(p => p.productName).join(','),
-        leadStatus: form.leadStatus,
-        leadSource: form.leadSource,
-        budget: form.budget ? parseFloat(form.budget) : 0,
-        notes: form.notes,
-      });
-      onSaved(saved);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const inputClass = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500';
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">Add New Lead</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-
-          {/* ── Customer selection ── */}
-          {!addingNewCustomer ? (
-            <div>
-              <SearchableDropdown
-                label="Customer *"
-                placeholder="Search by name or phone…"
-                items={customers}
-                displayFn={c => `${c.customerName} — ${c.customerPhone}`}
-                keyFn={c => c.customerPhone}
-                onSelect={handleCustomerSelect}
-                onAddNew={() => { setAddingNewCustomer(true); setError(''); }}
-                addNewLabel="customer"
-              />
-              {form.customerName && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Selected: <span className="font-medium text-gray-700">{form.customerName}</span> ({form.customerPhone})
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="border border-terracotta-200 rounded-lg p-3 space-y-3 bg-terracotta-50/30">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-terracotta-700">New Customer</span>
-                <button type="button" onClick={() => { setAddingNewCustomer(false); setError(''); }}
-                  className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
-              </div>
-              <input
-                type="text"
-                value={newCustomer.customerName}
-                onChange={e => setNewCustomer(p => ({ ...p, customerName: e.target.value }))}
-                className={inputClass}
-                placeholder="Name *"
-              />
-              <input
-                type="text"
-                value={newCustomer.customerPhone}
-                onChange={e => setNewCustomer(p => ({ ...p, customerPhone: e.target.value }))}
-                className={inputClass}
-                placeholder="Phone *"
-              />
-              <input
-                type="text"
-                value={newCustomer.customerEmail}
-                onChange={e => setNewCustomer(p => ({ ...p, customerEmail: e.target.value }))}
-                className={inputClass}
-                placeholder="Email (optional)"
-              />
-              <input
-                type="text"
-                value={newCustomer.customerAddress}
-                onChange={e => setNewCustomer(p => ({ ...p, customerAddress: e.target.value }))}
-                className={inputClass}
-                placeholder="Address (optional)"
-              />
-              <button
-                type="button"
-                onClick={handleCreateNewCustomer}
-                disabled={savingCustomer}
-                className="w-full px-3 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50"
-              >
-                {savingCustomer ? 'Creating…' : 'Create Customer'}
-              </button>
-            </div>
-          )}
-
-          {/* Email — editable after customer is selected */}
-          {form.customerName && !addingNewCustomer && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <input
-                value={form.customerEmail}
-                onChange={e => set('customerEmail', e.target.value)}
-                className={inputClass}
-                placeholder="customer@email.com"
-              />
-            </div>
-          )}
-
-          {/* Products */}
-          <SearchableDropdown
-            label="Products Interested *"
-            placeholder="Search inventory…"
-            items={products}
-            displayFn={p => p.productName}
-            keyFn={p => p.articleId}
-            multi
-            selected={form.selectedProducts}
-            onChange={sel => set('selectedProducts', sel)}
-            chipClassName="bg-indigo-50 text-indigo-700"
-          />
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Lead Status</label>
-              <select
-                value={form.leadStatus}
-                onChange={e => set('leadStatus', e.target.value)}
-                className={inputClass}
-              >
-                {LEAD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Lead Source</label>
-              <select
-                value={form.leadSource}
-                onChange={e => set('leadSource', e.target.value)}
-                className={inputClass}
-              >
-                <option value="">Select source…</option>
-                {LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Budget ₹</label>
-            <input
-              type="number"
-              min="0"
-              value={form.budget}
-              onChange={e => set('budget', e.target.value)}
-              className={inputClass}
-              placeholder="0"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea
-              rows={2}
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
-              className={`${inputClass} resize-none`}
-              placeholder="Conversation notes, preferences…"
-            />
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <AlertCircle size={14} className="text-red-500 shrink-0" />
-              <p className="text-xs text-red-600">{error}</p>
-            </div>
-          )}
-
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 px-4 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Add Lead'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 // ── Kanban Board ──────────────────────────────────────────────
 
 function KanbanBoard({ leads, onStatusChange, onDelete, onArchive }) {
@@ -1215,7 +948,6 @@ export default function Leads() {
   const listView = searchParams.get('view') || 'table';
   const classFilter = searchParams.get('class') || ''; // 'hot' | 'warm' | 'cold' | ''
 
-  const [addModalOpen, setAddModalOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState(null);
   const [filterSearch, setFilterSearch] = useState('');
 
@@ -1296,11 +1028,6 @@ export default function Leads() {
     setSearchParams(next);
   }
 
-  function handleLeadAdded() {
-    refetch();
-    setAddModalOpen(false);
-  }
-
   async function handleStatusChange(leadId, newStatus) {
     try {
       await updateLead(leadId, { leadStatus: newStatus });
@@ -1362,13 +1089,13 @@ export default function Leads() {
             <Archive size={15} />
             <span className="hidden md:inline">Archived</span>
           </Link>
-          <button
-            onClick={() => setAddModalOpen(true)}
+          <Link
+            to="/leads/new"
             className="flex items-center gap-2 px-3 py-2 bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 transition-colors text-sm font-medium"
           >
             <Plus size={16} />
             <span className="hidden md:inline">Add Lead</span>
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -1590,12 +1317,6 @@ export default function Leads() {
         </>
       )}
 
-      {addModalOpen && (
-        <AddLeadModal
-          onClose={() => setAddModalOpen(false)}
-          onSaved={handleLeadAdded}
-        />
-      )}
       {confirmModal && <ConfirmModal {...confirmModal} onClose={() => setConfirmModal(null)} />}
     </div>
   );

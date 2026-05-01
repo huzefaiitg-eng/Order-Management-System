@@ -12,7 +12,12 @@ function authMiddleware(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET);
-    req.user = { email: decoded.email, sheetId: decoded.sheetId };
+    req.user = {
+      email: decoded.email,
+      sheetId: decoded.sheetId,
+      // Older tokens (issued before this field) default to false until re-login.
+      hasInventoryAccess: decoded.hasInventoryAccess === true,
+    };
     next();
   } catch (err) {
     return res.status(401).json({ success: false, error: 'Invalid or expired token' });

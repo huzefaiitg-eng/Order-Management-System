@@ -7,6 +7,7 @@ import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import { useAuth } from '../context/AuthContext';
 import { useDashboard } from '../hooks/useDashboard';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useCardFilters } from '../hooks/useCardFilters';
@@ -66,16 +67,23 @@ function buildActiveChips(applied, removeChip) {
 
 export default function Dashboard() {
   const { data, loading, error } = useDashboard();
+  const { user } = useAuth();
+  const hasInventoryAccess = !!user?.hasInventoryAccess;
   const isMobile = useIsMobile();
 
-  // Master lists for customer / product pickers (fetched once; refreshed on mount)
+  // Master lists for customer / product pickers (fetched once; refreshed on mount).
+  // Skip the inventory fetch entirely for users without access — the API would 403.
   const [allCustomers, setAllCustomers] = useState([]);
   const [allProducts, setAllProducts]   = useState([]);
 
   useEffect(() => {
     fetchCustomers('', 'Active').then(setAllCustomers).catch(() => setAllCustomers([]));
-    fetchInventory({ status: 'Active' }).then(setAllProducts).catch(() => setAllProducts([]));
-  }, []);
+    if (hasInventoryAccess) {
+      fetchInventory({ status: 'Active' }).then(setAllProducts).catch(() => setAllProducts([]));
+    } else {
+      setAllProducts([]);
+    }
+  }, [hasInventoryAccess]);
 
   // ── Page-level time filter (shared across ALL cards) ───────────────────────
   const [pageTimePreset,  setPageTimePreset]  = useState('all');
@@ -415,7 +423,7 @@ export default function Dashboard() {
         open={kpiFilters.isOpen}
         onClose={kpiFilters.closeModal}
         title="Filter: Orders KPIs"
-        fields={{ time: false, source: true, customer: true, product: true }}
+        fields={{ time: false, source: true, customer: true, product: hasInventoryAccess }}
         pending={kpiFilters.pending}
         setPending={kpiFilters.setPending}
         allCustomers={allCustomers}
@@ -428,7 +436,7 @@ export default function Dashboard() {
         open={sourceChartFilters.isOpen}
         onClose={sourceChartFilters.closeModal}
         title="Filter: Orders by Source"
-        fields={{ time: false, source: false, customer: true, product: true }}
+        fields={{ time: false, source: false, customer: true, product: hasInventoryAccess }}
         pending={sourceChartFilters.pending}
         setPending={sourceChartFilters.setPending}
         allCustomers={allCustomers}
@@ -441,7 +449,7 @@ export default function Dashboard() {
         open={revenueChartFilters.isOpen}
         onClose={revenueChartFilters.closeModal}
         title="Filter: Revenue & Profit"
-        fields={{ time: false, source: true, customer: true, product: true }}
+        fields={{ time: false, source: true, customer: true, product: hasInventoryAccess }}
         pending={revenueChartFilters.pending}
         setPending={revenueChartFilters.setPending}
         allCustomers={allCustomers}
@@ -455,7 +463,7 @@ export default function Dashboard() {
         open={statusChartFilters.isOpen}
         onClose={statusChartFilters.closeModal}
         title="Filter: Order Status"
-        fields={{ time: false, source: true, customer: true, product: true }}
+        fields={{ time: false, source: true, customer: true, product: hasInventoryAccess }}
         pending={statusChartFilters.pending}
         setPending={statusChartFilters.setPending}
         allCustomers={allCustomers}
@@ -468,7 +476,7 @@ export default function Dashboard() {
         open={paymentChartFilters.isOpen}
         onClose={paymentChartFilters.closeModal}
         title="Filter: Payment Mode"
-        fields={{ time: false, source: true, customer: true, product: true }}
+        fields={{ time: false, source: true, customer: true, product: hasInventoryAccess }}
         pending={paymentChartFilters.pending}
         setPending={paymentChartFilters.setPending}
         allCustomers={allCustomers}
@@ -481,7 +489,7 @@ export default function Dashboard() {
         open={channelFilters.isOpen}
         onClose={channelFilters.closeModal}
         title="Filter: Channel Revenue"
-        fields={{ time: false, source: false, customer: true, product: true }}
+        fields={{ time: false, source: false, customer: true, product: hasInventoryAccess }}
         pending={channelFilters.pending}
         setPending={channelFilters.setPending}
         allCustomers={allCustomers}
@@ -494,7 +502,7 @@ export default function Dashboard() {
         open={topProductFilters.isOpen}
         onClose={topProductFilters.closeModal}
         title="Filter: Top Products"
-        fields={{ time: false, source: true, customer: true, product: true }}
+        fields={{ time: false, source: true, customer: true, product: hasInventoryAccess }}
         pending={topProductFilters.pending}
         setPending={topProductFilters.setPending}
         allCustomers={allCustomers}

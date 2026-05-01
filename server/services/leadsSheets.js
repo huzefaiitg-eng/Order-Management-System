@@ -36,15 +36,82 @@ const COL_FU = {
 
 // ── Helpers ───────────────────────────────────────────────────
 
+/**
+ * Parses the productsInterested cell (column F) into a productLines array.
+ *
+ * Supports two formats:
+ *   1. New canonical: JSON array `[{productName, productCost, sellingPrice, quantity, articleId}, ...]`
+ *   2. Legacy: comma-separated names "Air Max, Casual Loafer" → lines with empty cost/price/qty
+ *
+ * Returns [] if the cell is empty or unparseable.
+ */
+function parseProductLines(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return [];
+  if (s.startsWith('[')) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr)) {
+        return arr.map(line => ({
+          productName:  String(line.productName || '').trim(),
+          productCost:  Number(line.productCost) || 0,
+          sellingPrice: Number(line.sellingPrice) || 0,
+          quantity:     Number(line.quantity) || 1,
+          articleId:    String(line.articleId || '').trim(),
+        })).filter(l => l.productName);
+      }
+    } catch { /* fall through to legacy */ }
+  }
+  // Legacy comma-separated names
+  return s.split(',')
+    .map(n => n.trim())
+    .filter(Boolean)
+    .map(name => ({
+      productName: name,
+      productCost: 0,
+      sellingPrice: 0,
+      quantity: 1,
+      articleId: '',
+    }));
+}
+
+/**
+ * Serialize a productLines array → JSON string for column F.
+ * Falls back to '' for empty arrays.
+ */
+function serializeProductLines(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return '';
+  const clean = lines
+    .map(line => ({
+      productName:  String(line.productName || '').trim(),
+      productCost:  Number(line.productCost) || 0,
+      sellingPrice: Number(line.sellingPrice) || 0,
+      quantity:     Number(line.quantity) || 1,
+      articleId:    String(line.articleId || '').trim(),
+    }))
+    .filter(l => l.productName);
+  return clean.length === 0 ? '' : JSON.stringify(clean);
+}
+
+/** Derive a legacy comma-separated product names string from productLines. */
+function productLinesToNames(lines) {
+  if (!Array.isArray(lines)) return '';
+  return lines.map(l => l.productName).filter(Boolean).join(', ');
+}
+
 function rowToLead(row, rowIndex) {
   const rawStatus = row[COL.leadStatus] || 'New Lead';
+  const productLines = parseProductLines(row[COL.productsInterested]);
   return {
     leadId: row[COL.leadId] || '',
     leadDate: row[COL.leadDate] || '',
     customerName: row[COL.customerName] || '',
     customerPhone: row[COL.customerPhone] || '',
     customerEmail: row[COL.customerEmail] || '',
-    productsInterested: row[COL.productsInterested] || '',
+    // Canonical: productLines array with cost/price/qty/articleId per item
+    productLines,
+    // Backward-compat: comma-separated names derived from productLines
+    productsInterested: productLinesToNames(productLines),
     // Silently migrate any legacy "Follow-up" status leads → "Interested"
     leadStatus: rawStatus === 'Follow-up' ? 'Interested' : rawStatus,
     leadSource: row[COL.leadSource] || '',
@@ -197,7 +264,8 @@ async function getNextLeadId(sheetId) {
 
 async function addLead(sheetId, {
   customerName, customerPhone, customerEmail = '',
-  productsInterested = '', leadStatus = 'New Lead', leadSource = '',
+  productsInterested = '', productLines = null,
+  leadStatus = 'New Lead', leadSource = '',
   budget = 0, notes = '',
 }) {
   await ensureLeadsTab(sheetId);
@@ -205,6 +273,11 @@ async function addLead(sheetId, {
   const leadId = await getNextLeadId(sheetId);
   const leadDate = formatDate();
   const createdAt = new Date().toISOString();
+
+  // Prefer productLines (canonical). Fall back to legacy productsInterested string.
+  const productsCell = Array.isArray(productLines) && productLines.length > 0
+    ? serializeProductLines(productLines)
+    : (productsInterested || '');
 
   const sheets = await getClient();
   await sheets.spreadsheets.values.append({
@@ -214,7 +287,7 @@ async function addLead(sheetId, {
     requestBody: {
       values: [[
         leadId, leadDate, customerName, customerPhone, customerEmail,
-        productsInterested, leadStatus, leadSource, '',   // followUpDate always empty now
+        productsCell, leadStatus, leadSource, '',         // followUpDate always empty now
         String(budget || 0), notes, '', createdAt, '',    // archivedAt empty
       ]],
     },
@@ -238,7 +311,7 @@ async function addLead(sheetId, {
 
   return rowToLead([
     leadId, leadDate, customerName, customerPhone, customerEmail,
-    productsInterested, leadStatus, leadSource, '',
+    productsCell, leadStatus, leadSource, '',
     String(budget || 0), notes, '', createdAt,
   ], -1); // rowIndex unknown at append time, refresh to get it
 }
@@ -267,7 +340,17 @@ async function updateLead(sheetId, leadId, updates) {
     convertedOrderRow: { col: 'L' },
   };
 
+  // productLines (canonical) → JSON in column F. Wins over legacy productsInterested.
+  if (updates.productLines !== undefined) {
+    data.push({
+      range: `Leads!F${rowIdx}`,
+      values: [[serializeProductLines(updates.productLines)]],
+    });
+  }
+
   for (const [field, { col }] of Object.entries(fieldColMap)) {
+    // Skip productsInterested if productLines was provided — productLines wins
+    if (field === 'productsInterested' && updates.productLines !== undefined) continue;
     if (updates[field] !== undefined) {
       data.push({
         range: `Leads!${col}${rowIdx}`,
@@ -283,7 +366,12 @@ async function updateLead(sheetId, leadId, updates) {
     });
   }
 
-  return { ...lead, ...updates };
+  const merged = { ...lead, ...updates };
+  // Keep productsInterested string in sync with productLines if productLines changed
+  if (updates.productLines !== undefined) {
+    merged.productsInterested = productLinesToNames(updates.productLines);
+  }
+  return merged;
 }
 
 // ── Leads — Delete ────────────────────────────────────────────

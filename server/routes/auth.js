@@ -26,7 +26,11 @@ router.post('/login', async (req, res) => {
       return res.status(500).json({ success: false, error: 'Invalid order sheet configuration for this user' });
     }
 
-    const token = jwt.sign({ email: user.email, sheetId }, env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(
+      { email: user.email, sheetId, hasInventoryAccess: user.hasInventoryAccess },
+      env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.json({
       success: true,
@@ -39,6 +43,7 @@ router.post('/login', async (req, res) => {
           phone: user.phone,
           address: user.address,
           website: user.website,
+          hasInventoryAccess: user.hasInventoryAccess,
         },
       },
     });
@@ -65,6 +70,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
         phone: user.phone,
         address: user.address,
         website: user.website,
+        hasInventoryAccess: user.hasInventoryAccess,
       },
     });
   } catch (error) {

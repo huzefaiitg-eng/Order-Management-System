@@ -10,9 +10,11 @@ const USER_COLUMN_MAP = {
   website: 5,
   password: 6,
   orderSheetLink: 7,
+  inventoryAccess: 8,   // Column I — 'Yes' (case-insensitive) = enabled, anything else = disabled
 };
 
 function rowToUser(row, rowIndex) {
+  const accessRaw = String(row[USER_COLUMN_MAP.inventoryAccess] || '').trim().toLowerCase();
   return {
     rowIndex,
     name: row[USER_COLUMN_MAP.name] || '',
@@ -23,6 +25,7 @@ function rowToUser(row, rowIndex) {
     website: row[USER_COLUMN_MAP.website] || '',
     password: row[USER_COLUMN_MAP.password] || '',
     orderSheetLink: row[USER_COLUMN_MAP.orderSheetLink] || '',
+    hasInventoryAccess: accessRaw === 'yes',
   };
 }
 
@@ -35,7 +38,7 @@ async function getUserByEmail(email) {
   const sheets = await getClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: env.USER_ACCESS_SHEET_ID,
-    range: 'Sheet1!A2:H',
+    range: 'Sheet1!A2:I',
   });
 
   const rows = response.data.values || [];

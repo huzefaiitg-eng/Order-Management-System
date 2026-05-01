@@ -64,7 +64,7 @@ router.post('/', async (req, res) => {
     const { sheetId } = req.user;
     const {
       customerName, customerPhone, customerEmail,
-      productsInterested, leadStatus, leadSource,
+      productsInterested, productLines, leadStatus, leadSource,
       budget, notes,
     } = req.body;
 
@@ -80,6 +80,7 @@ router.post('/', async (req, res) => {
       customerPhone: customerPhone.trim(),
       customerEmail: customerEmail?.trim() || '',
       productsInterested: productsInterested || '',
+      productLines: Array.isArray(productLines) ? productLines : null,
       leadStatus: leadStatus || 'New Lead',
       leadSource: leadSource || '',
       budget: parseFloat(budget) || 0,

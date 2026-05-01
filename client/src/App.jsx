@@ -1,6 +1,6 @@
 import { Component } from 'react';
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Login from './pages/Login';
@@ -8,17 +8,30 @@ import Profile from './pages/Profile';
 import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
+import AddOrder from './pages/AddOrder';
 import Customers from './pages/Customers';
 import CustomerDetail from './pages/CustomerDetail';
 import ArchivedCustomers from './pages/ArchivedCustomers';
 import InventoryPage from './pages/Inventory';
+import InventoryUpsell from './pages/InventoryUpsell';
 import ProductDetail from './pages/ProductDetail';
 import ArchivedInventory from './pages/ArchivedInventory';
 import SettingsPage from './pages/Settings';
 import LandingPage from './pages/LandingPage';
 import Leads from './pages/Leads';
 import LeadDetail from './pages/LeadDetail';
+import AddLead from './pages/AddLead';
 import ArchivedLeads from './pages/ArchivedLeads';
+
+/**
+ * Renders the inventory page for users with access, or the upsell/marketing
+ * page for users without. Same gate is reused for archived + product detail.
+ */
+function InventoryGate({ children }) {
+  const { user } = useAuth();
+  if (!user?.hasInventoryAccess) return <InventoryUpsell />;
+  return children;
+}
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -75,16 +88,18 @@ export default function App() {
               <Route element={<AppLayout />}>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/orders" element={<Orders />} />
+                <Route path="/orders/new" element={<AddOrder />} />
                 <Route path="/orders/:rowIndex" element={<OrderDetail />} />
-                <Route path="/inventory" element={<InventoryPage />} />
-                <Route path="/inventory/archived" element={<ArchivedInventory />} />
-                <Route path="/inventory/:articleId" element={<ProductDetail />} />
+                <Route path="/inventory" element={<InventoryGate><InventoryPage /></InventoryGate>} />
+                <Route path="/inventory/archived" element={<InventoryGate><ArchivedInventory /></InventoryGate>} />
+                <Route path="/inventory/:articleId" element={<InventoryGate><ProductDetail /></InventoryGate>} />
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/customers/archived" element={<ArchivedCustomers />} />
                 <Route path="/customers/:phone" element={<CustomerDetail />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/leads" element={<Leads />} />
+                <Route path="/leads/new" element={<AddLead />} />
                 <Route path="/leads/archived" element={<ArchivedLeads />} />
                 <Route path="/leads/:leadId" element={<LeadDetail />} />
               </Route>

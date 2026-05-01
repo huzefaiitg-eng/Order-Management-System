@@ -19,6 +19,20 @@ function parseCategories(raw) {
   return String(raw).split(',').map(s => s.trim()).filter(Boolean);
 }
 
+// Inventory module access guard. Users without 'Yes' in their User Access row's
+// "Inventory Access" column get 403 on every endpoint here. Frontend never calls
+// these for users without access — this is defense-in-depth.
+router.use((req, res, next) => {
+  if (!req.user.hasInventoryAccess) {
+    return res.status(403).json({
+      success: false,
+      error: 'Inventory module is not enabled for this account.',
+      code: 'INVENTORY_DISABLED',
+    });
+  }
+  next();
+});
+
 router.get('/summary', async (req, res) => {
   try {
     const { sheetId } = req.user;

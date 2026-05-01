@@ -11,10 +11,11 @@ import {
   addLeadFollowUp, markLeadFollowUpDone,
 } from '../services/api';
 import { StatusBadge, LEAD_STATUSES, STATUS_CONFIG } from './Leads';
-import SearchableDropdown from '../components/SearchableDropdown';
 import DetailOverlay from '../components/DetailOverlay';
 import Loader from '../components/Loader';
 import ConfirmModal from '../components/ConfirmModal';
+import ProductLineEditor from '../components/ProductLineEditor';
+import { useAuth } from '../context/AuthContext';
 
 const LEAD_SOURCES_LIST = ['WhatsApp', 'Instagram', 'Facebook', 'Referral', 'Walk-in/Offline'];
 
@@ -274,6 +275,8 @@ function FollowUpSection({ leadId, followUps, onFollowUpsChange, disabled }) {
 export default function LeadDetail() {
   const { leadId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const hasInventoryAccess = !!user?.hasInventoryAccess;
 
   const [lead, setLead] = useState(null);
   const [followUps, setFollowUps] = useState([]);
@@ -309,11 +312,27 @@ export default function LeadDetail() {
   }, [editing]);
 
   function startEditing() {
+    // Seed productLines for ProductLineEditor. Existing lines retain articleId
+    // (=> inventory mode) or fall back to custom mode if articleId is missing.
+    const seededLines = (Array.isArray(lead.productLines) && lead.productLines.length > 0
+      ? lead.productLines
+      : parseProducts(lead.productsInterested).map(name => ({ productName: name }))
+    ).map(l => ({
+      productName:  l.productName || '',
+      productCost:  Number(l.productCost) || 0,
+      sellingPrice: Number(l.sellingPrice) || 0,
+      quantity:     Math.max(1, Math.round(Number(l.quantity) || 1)),
+      articleId:    l.articleId || '',
+      _mode:        l.articleId ? 'inventory' : 'custom',
+    }));
     setEditForm({
       customerName: lead.customerName,
       customerPhone: lead.customerPhone,
       customerEmail: lead.customerEmail || '',
-      selectedProducts: parseProducts(lead.productsInterested).map(name => ({ productName: name, articleId: name })),
+      productLines: seededLines.length > 0 ? seededLines : [{
+        productName: '', productCost: 0, sellingPrice: 0, quantity: 1, articleId: '',
+        _mode: hasInventoryAccess ? 'inventory' : 'custom',
+      }],
       leadStatus: lead.leadStatus,
       leadSource: lead.leadSource || '',
       budget: lead.budget || '',
@@ -336,18 +355,28 @@ export default function LeadDetail() {
     setSaving(true);
     setEditError('');
     try {
+      const productLines = (editForm.productLines || [])
+        .filter(l => (l.productName || '').trim())
+        .map(l => ({
+          productName:  l.productName.trim(),
+          productCost:  Number(l.productCost) || 0,
+          sellingPrice: Number(l.sellingPrice) || 0,
+          quantity:     Math.max(1, Math.round(Number(l.quantity) || 1)),
+          articleId:    l.articleId || '',
+        }));
       const updates = {
         customerName: editForm.customerName.trim(),
         customerPhone: editForm.customerPhone.trim(),
         customerEmail: editForm.customerEmail.trim(),
-        productsInterested: editForm.selectedProducts.map(p => p.productName).join(','),
+        productLines,
         leadStatus: editForm.leadStatus,
         leadSource: editForm.leadSource,
         budget: editForm.budget ? parseFloat(editForm.budget) : 0,
         notes: editForm.notes,
       };
-      await updateLead(leadId, updates);
-      setLead(prev => ({ ...prev, ...updates }));
+      const updated = await updateLead(leadId, updates);
+      // Server returns the canonical lead with productLines + derived productsInterested
+      setLead(prev => ({ ...prev, ...updates, ...updated }));
       setEditing(false);
     } catch (err) {
       setEditError(err.message);
@@ -413,12 +442,15 @@ export default function LeadDetail() {
   }
 
   function handleCreateOrder() {
-    navigate('/orders?tab=details&openAdd=1', {
+    // Forward the full productLines array (cost/price/qty/articleId) — the
+    // new AddOrder route consumes location.state.prefill on mount.
+    navigate('/orders/new', {
       state: {
         prefill: {
           customerName: lead.customerName,
           customerPhone: lead.customerPhone,
-          productName: parseProducts(lead.productsInterested)[0] || '',
+          customerEmail: lead.customerEmail || '',
+          productLines: Array.isArray(lead.productLines) ? lead.productLines : [],
           leadId: lead.leadId,
         },
       },
@@ -653,17 +685,53 @@ export default function LeadDetail() {
             Products Interested
           </h3>
           {editing ? (
-            <SearchableDropdown
-              placeholder="Search inventory…"
-              items={products}
-              displayFn={p => p.productName}
-              keyFn={p => p.articleId || p.productName}
-              multi
-              selected={editForm.selectedProducts}
-              onChange={sel => setEditForm(f => ({ ...f, selectedProducts: sel }))}
-              chipClassName="bg-indigo-50 text-indigo-700"
+            <ProductLineEditor
+              lines={editForm.productLines || []}
+              onChange={(next) => setEditForm(f => ({ ...f, productLines: next }))}
+              inventory={products}
+              hasInventoryAccess={hasInventoryAccess}
+              sellingPriceLocked={false}
             />
+          ) : Array.isArray(lead.productLines) && lead.productLines.length > 0 ? (
+            <div className="overflow-x-auto -mx-1">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-gray-500 border-b border-gray-100">
+                    <th className="px-2 py-2 font-medium">Product</th>
+                    <th className="px-2 py-2 font-medium">Type</th>
+                    <th className="px-2 py-2 font-medium text-right">Cost</th>
+                    <th className="px-2 py-2 font-medium text-right">Price</th>
+                    <th className="px-2 py-2 font-medium text-right">Qty</th>
+                    <th className="px-2 py-2 font-medium text-right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {lead.productLines.map((line, i) => {
+                    const sub = (Number(line.sellingPrice) || 0) * (Number(line.quantity) || 1);
+                    return (
+                      <tr key={i}>
+                        <td className="px-2 py-2 text-gray-900 font-medium">{line.productName}</td>
+                        <td className="px-2 py-2">
+                          {line.articleId ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                              <Package size={11} /> Inventory
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Custom</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-right text-gray-600">₹{(Number(line.productCost) || 0).toLocaleString('en-IN')}</td>
+                        <td className="px-2 py-2 text-right text-gray-600">₹{(Number(line.sellingPrice) || 0).toLocaleString('en-IN')}</td>
+                        <td className="px-2 py-2 text-right text-gray-600">{Number(line.quantity) || 1}</td>
+                        <td className="px-2 py-2 text-right text-gray-900 font-semibold">₹{sub.toLocaleString('en-IN')}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           ) : productList.length > 0 ? (
+            // Fallback for legacy leads with only names
             <div className="flex flex-wrap gap-2">
               {productList.map((name, i) => (
                 <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium">
