@@ -21,7 +21,12 @@ const NAV_SECTIONS = [
     items: [
       { path: '/dashboard', label: 'Sales Dashboard', icon: LayoutDashboard },
       { path: '/orders',    label: 'Orders',          icon: ShoppingBag },
-      { path: '/inventory', label: 'Inventory',        icon: Package },
+    ],
+  },
+  {
+    label: 'Inventory Management',
+    items: [
+      { path: '/inventory', label: 'Inventory', icon: Package },
     ],
   },
 ];

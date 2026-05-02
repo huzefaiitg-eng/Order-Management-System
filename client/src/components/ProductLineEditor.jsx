@@ -1,5 +1,6 @@
 import { Trash2, Plus, Package, Pencil } from 'lucide-react';
 import SearchableDropdown from './SearchableDropdown';
+import NumberField from './NumberField';
 import { formatCurrency } from '../utils/formatters';
 
 /**
@@ -214,24 +215,25 @@ function InventoryLineFields({ line, inventory, onPickProduct, onUpdate, selling
       {/* Read-only cost + price + qty row (only show when product picked) */}
       {line.articleId && (
         <div className="grid grid-cols-3 gap-2.5">
-          <FieldNumber
+          <NumberField
             label="Your Cost"
             value={line.productCost}
             onChange={() => {}}
             readOnly
           />
-          <FieldNumber
+          <NumberField
             label="Selling Price"
             value={line.sellingPrice}
             onChange={(v) => onUpdate({ sellingPrice: v })}
             readOnly={sellingPriceLocked}
           />
-          <FieldNumber
+          <NumberField
             label="Qty"
-            value={line.quantity}
-            onChange={(v) => onUpdate({ quantity: Math.max(1, Math.round(v)) })}
+            value={line.quantity || 1}
+            onChange={(v) => onUpdate({ quantity: Math.max(1, v || 1) })}
             min={1}
             integer
+            stepper
           />
         </div>
       )}
@@ -255,50 +257,25 @@ function CustomLineFields({ line, onUpdate }) {
         />
       </div>
       <div className="grid grid-cols-3 gap-2.5">
-        <FieldNumber
+        <NumberField
           label="Your Cost"
           value={line.productCost}
           onChange={(v) => onUpdate({ productCost: v })}
         />
-        <FieldNumber
+        <NumberField
           label="Selling Price"
           value={line.sellingPrice}
           onChange={(v) => onUpdate({ sellingPrice: v })}
         />
-        <FieldNumber
+        <NumberField
           label="Qty"
-          value={line.quantity}
-          onChange={(v) => onUpdate({ quantity: Math.max(1, Math.round(v)) })}
+          value={line.quantity || 1}
+          onChange={(v) => onUpdate({ quantity: Math.max(1, v || 1) })}
           min={1}
           integer
+          stepper
         />
       </div>
-    </div>
-  );
-}
-
-// ── Number field ──────────────────────────────────────────────────────
-
-function FieldNumber({ label, value, onChange, readOnly = false, min = 0, integer = false }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-      <input
-        type="number"
-        min={min}
-        step={integer ? 1 : 'any'}
-        value={value ?? ''}
-        onChange={e => {
-          const raw = e.target.value;
-          if (raw === '') return onChange(0);
-          const num = integer ? parseInt(raw, 10) : parseFloat(raw);
-          onChange(isNaN(num) ? 0 : num);
-        }}
-        readOnly={readOnly}
-        className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 ${
-          readOnly ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-white border-gray-300'
-        }`}
-      />
     </div>
   );
 }

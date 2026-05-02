@@ -7,7 +7,8 @@ import {
 } from '../services/api';
 import DetailOverlay from '../components/DetailOverlay';
 import ProductLineEditor from '../components/ProductLineEditor';
-import SearchableDropdown from '../components/SearchableDropdown';
+import CustomerSelector from '../components/CustomerSelector';
+import NumberField from '../components/NumberField';
 import StatusBadge from '../components/StatusBadge';
 import BillModal from '../components/BillModal';
 import { useCategories } from '../hooks/useCategories';
@@ -337,22 +338,18 @@ export default function AddOrder() {
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             <h2 className="text-sm font-semibold text-gray-900">Customer</h2>
             {!addingNewCustomer ? (
-              <>
-                <SearchableDropdown
-                  label=""
-                  placeholder="Search by name or phone..."
-                  items={customers}
-                  displayFn={c => `${c.customerName} - ${c.customerPhone}`}
-                  onSelect={handleCustomerSelect}
-                  onAddNew={() => setAddingNewCustomer(true)}
-                  addNewLabel="customer"
-                />
-                {form.customerName && (
-                  <p className="text-xs text-gray-500">
-                    Selected: <span className="font-medium text-gray-700">{form.customerName}</span> ({form.customerPhone})
-                  </p>
-                )}
-              </>
+              <CustomerSelector
+                customers={customers}
+                selected={form.customerName ? {
+                  customerName:    form.customerName,
+                  customerPhone:   form.customerPhone,
+                  customerEmail:   form.customerEmail,
+                  customerAddress: form.customerAddress,
+                } : null}
+                onSelect={handleCustomerSelect}
+                onClear={() => setForm(f => ({ ...f, customerName: '', customerPhone: '', customerEmail: '', customerAddress: '' }))}
+                onAddNew={() => setAddingNewCustomer(true)}
+              />
             ) : (
               <div className="border border-terracotta-200 rounded-lg p-3 space-y-3 bg-terracotta-50/30">
                 <div className="flex items-center justify-between">
@@ -397,21 +394,16 @@ export default function AddOrder() {
               <span className="text-[11px] text-gray-400 font-normal">(optional, applied at order level)</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Discount amount (₹)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={form.discount}
-                  onChange={e => setForm({ ...form, discount: parseFloat(e.target.value) || 0 })}
-                  className={inputClass}
-                  placeholder="0"
-                />
-              </div>
+              <NumberField
+                label="Discount amount (₹)"
+                value={form.discount}
+                onChange={(v) => setForm({ ...form, discount: v })}
+                placeholder="0"
+              />
               <div className="flex items-end text-xs text-gray-500">
                 {discount > 0 && subtotal > 0
                   ? <span>That&apos;s a {((discount / subtotal) * 100).toFixed(1)}% discount on a subtotal of {formatCurrency(subtotal)}.</span>
-                  : <span>Leave 0 if no discount applies.</span>}
+                  : <span>Leave blank if no discount applies.</span>}
               </div>
             </div>
           </div>
