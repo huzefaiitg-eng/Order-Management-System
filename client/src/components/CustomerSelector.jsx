@@ -1,4 +1,4 @@
-import { Phone, Mail } from 'lucide-react';
+import { Phone, Mail, X } from 'lucide-react';
 import SearchableDropdown from './SearchableDropdown';
 
 /**
@@ -27,7 +27,7 @@ export default function CustomerSelector({
 }) {
   if (selected && selected.customerName) {
     return (
-      <div className="flex items-start justify-between bg-white rounded-lg border border-gray-300 px-3.5 py-3 gap-3">
+      <div className="flex items-start gap-2.5 bg-white rounded-lg border border-gray-300 px-3.5 py-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-900 truncate">{selected.customerName}</p>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
@@ -47,9 +47,11 @@ export default function CustomerSelector({
         <button
           type="button"
           onClick={onClear}
-          className="text-xs text-gray-500 hover:text-terracotta-700 underline shrink-0 mt-0.5"
+          className="shrink-0 text-gray-400 hover:text-terracotta-700 hover:bg-terracotta-50 p-1 rounded transition-colors"
+          title="Change customer"
+          aria-label="Change customer"
         >
-          Change
+          <X size={15} />
         </button>
       </div>
     );

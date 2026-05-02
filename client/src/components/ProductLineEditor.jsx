@@ -1,4 +1,4 @@
-import { Trash2, Plus, Package, Pencil } from 'lucide-react';
+import { Trash2, Plus, Package, Pencil, X } from 'lucide-react';
 import SearchableDropdown from './SearchableDropdown';
 import NumberField from './NumberField';
 import { formatCurrency } from '../utils/formatters';
@@ -196,31 +196,31 @@ function InventoryLineFields({ line, inventory, onPickProduct, onUpdate, selling
             // No onAddNew here — add new products from the Inventory page
           />
         ) : (
-          <div className="flex items-center justify-between bg-white rounded-lg border border-gray-300 px-3 py-2">
-            <div className="min-w-0">
+          // Selected card — name + article ID + cost shown inline; X icon clears
+          // the selection and re-opens the search.
+          <div className="flex items-start gap-2.5 bg-white rounded-lg border border-gray-300 px-3 py-2.5">
+            <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">{line.productName}</p>
-              <p className="text-xs text-gray-400">{line.articleId} · Cost {formatCurrency(line.productCost)}</p>
+              <p className="mt-0.5 text-xs text-gray-400">
+                {line.articleId} · Cost {formatCurrency(line.productCost)}
+              </p>
             </div>
             <button
               type="button"
               onClick={() => onUpdate({ articleId: '', productName: '', productCost: 0, sellingPrice: 0 })}
-              className="text-xs text-gray-500 hover:text-terracotta-700 underline shrink-0"
+              className="shrink-0 text-gray-400 hover:text-terracotta-700 hover:bg-terracotta-50 p-1 rounded transition-colors"
+              title="Change product"
+              aria-label="Change product"
             >
-              Change
+              <X size={15} />
             </button>
           </div>
         )}
       </div>
 
-      {/* Read-only cost + price + qty row (only show when product picked) */}
+      {/* Selling Price + Qty on a 2-col row — gives the qty stepper plenty of room on mobile. */}
       {line.articleId && (
-        <div className="grid grid-cols-3 gap-2.5">
-          <NumberField
-            label="Your Cost"
-            value={line.productCost}
-            onChange={() => {}}
-            readOnly
-          />
+        <div className="grid grid-cols-2 gap-2.5">
           <NumberField
             label="Selling Price"
             value={line.sellingPrice}
@@ -246,22 +246,28 @@ function InventoryLineFields({ line, inventory, onPickProduct, onUpdate, selling
 function CustomLineFields({ line, onUpdate }) {
   return (
     <div className="space-y-2.5">
-      <div>
-        <label className="block text-xs font-medium text-gray-500 mb-1">Product Name</label>
-        <input
-          type="text"
-          value={line.productName}
-          onChange={e => onUpdate({ productName: e.target.value })}
-          placeholder="e.g. Adidas Casual Sneaker"
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 bg-white"
-        />
-      </div>
-      <div className="grid grid-cols-3 gap-2.5">
+      {/* Row 1: Name + Cost. Stacks to one column on mobile so the inputs
+          don't shrink past usable width. */}
+      <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr] gap-2.5">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Product Name</label>
+          <input
+            type="text"
+            value={line.productName}
+            onChange={e => onUpdate({ productName: e.target.value })}
+            placeholder="e.g. Adidas Casual Sneaker"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-terracotta-500 bg-white"
+          />
+        </div>
         <NumberField
           label="Your Cost"
           value={line.productCost}
           onChange={(v) => onUpdate({ productCost: v })}
         />
+      </div>
+
+      {/* Row 2: Selling Price + Qty — same 2-col rhythm as inventory mode. */}
+      <div className="grid grid-cols-2 gap-2.5">
         <NumberField
           label="Selling Price"
           value={line.sellingPrice}
