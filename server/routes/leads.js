@@ -136,14 +136,38 @@ router.get('/:leadId', async (req, res) => {
 router.patch('/:leadId', async (req, res) => {
   try {
     const { sheetId } = req.user;
+    const { leadId } = req.params;
     const updates = req.body;
 
     if (updates.leadStatus && !VALID_STATUSES.includes(updates.leadStatus)) {
       return res.status(400).json({ success: false, error: `Invalid lead status: ${updates.leadStatus}` });
     }
 
-    const updated = await updateLead(sheetId, req.params.leadId, updates);
-    res.json({ success: true, data: updated });
+    const updated = await updateLead(sheetId, leadId, updates);
+
+    // Auto-close any pending follow-ups when the lead transitions to a
+    // terminal status (Converted or Lost). This is the single source of
+    // truth — every status change path (LeadDetail buttons, Kanban drag,
+    // direct API calls) now gets this side-effect for free.
+    let autoClosedCount = 0;
+    if (updates.leadStatus === 'Converted' || updates.leadStatus === 'Lost') {
+      try {
+        const followUps = await getFollowUpsForLead(sheetId, leadId);
+        const pending = followUps.filter(f => f.happened !== 'Yes');
+        if (pending.length > 0) {
+          const remark = `Auto-closed: Lead marked as ${updates.leadStatus}`;
+          await Promise.all(
+            pending.map(f => markFollowUpHappened(sheetId, f.followUpId, remark))
+          );
+          autoClosedCount = pending.length;
+        }
+      } catch (err) {
+        // Don't fail the lead update if follow-up close fails — just log it.
+        console.error('Auto-close follow-ups failed:', err.message);
+      }
+    }
+
+    res.json({ success: true, data: { ...updated, autoClosedFollowUps: autoClosedCount } });
   } catch (error) {
     console.error('Error updating lead:', error.message);
     const status = error.message.includes('not found') ? 404 : 500;

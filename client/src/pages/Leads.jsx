@@ -1028,13 +1028,47 @@ export default function Leads() {
     setSearchParams(next);
   }
 
-  async function handleStatusChange(leadId, newStatus) {
+  async function applyStatusChange(leadId, newStatus) {
     try {
-      await updateLead(leadId, { leadStatus: newStatus });
-      setLeads(prev => prev.map(l => l.leadId === leadId ? { ...l, leadStatus: newStatus } : l));
+      const result = await updateLead(leadId, { leadStatus: newStatus });
+      setLeads(prev => prev.map(l => l.leadId === leadId ? {
+        ...l,
+        leadStatus: newStatus,
+        // Backend auto-closes pending follow-ups when transitioning to Converted/Lost.
+        // Clear the local nextFollowUp marker so the kanban card stops showing it.
+        nextFollowUp: (newStatus === 'Converted' || newStatus === 'Lost') ? null : l.nextFollowUp,
+      } : l));
+      return result;
     } catch (err) {
       console.error('Status update failed:', err.message);
+      throw err;
     }
+  }
+
+  function handleStatusChange(leadId, newStatus) {
+    // Terminal statuses get a confirmation modal that warns the user about
+    // pending follow-ups being auto-closed (the backend does this — we just
+    // surface the consequence).
+    if (newStatus === 'Converted' || newStatus === 'Lost') {
+      const lead = leads.find(l => l.leadId === leadId);
+      const hasOpenFu = !!lead?.nextFollowUp;
+      const followUpLine = hasOpenFu
+        ? ' The open follow-up scheduled for this lead will be marked as done automatically.'
+        : '';
+      const verb = newStatus === 'Converted' ? 'mark as Converted' : 'mark as Lost';
+      setConfirmModal({
+        title: newStatus === 'Converted' ? 'Mark Lead as Converted' : 'Mark Lead as Lost',
+        message: `Are you sure you want to ${verb} for ${lead?.customerName || 'this lead'}?${followUpLine}`,
+        confirmLabel: newStatus === 'Converted' ? 'Mark Converted' : 'Mark Lost',
+        variant: newStatus === 'Converted' ? 'warning' : 'danger',
+        onConfirm: async () => {
+          await applyStatusChange(leadId, newStatus);
+          setConfirmModal(null);
+        },
+      });
+      return;
+    }
+    applyStatusChange(leadId, newStatus);
   }
 
   function handleDelete(leadId, customerName) {

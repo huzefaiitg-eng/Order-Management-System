@@ -347,11 +347,7 @@ export default function LeadDetail() {
     setEditError('');
   }
 
-  async function handleSave() {
-    if (!editForm.customerName || !editForm.customerPhone) {
-      setEditError('Name and phone are required.');
-      return;
-    }
+  async function performSave() {
     setSaving(true);
     setEditError('');
     try {
@@ -377,6 +373,17 @@ export default function LeadDetail() {
       const updated = await updateLead(leadId, updates);
       // Server returns the canonical lead with productLines + derived productsInterested
       setLead(prev => ({ ...prev, ...updates, ...updated }));
+      // Backend auto-closes pending follow-ups on terminal transitions —
+      // refresh the local list so the UI catches up.
+      const transitionedToTerminal =
+        (updates.leadStatus === 'Converted' || updates.leadStatus === 'Lost') &&
+        lead?.leadStatus !== updates.leadStatus;
+      if (transitionedToTerminal) {
+        try {
+          const refreshed = await fetchLeadById(leadId);
+          setFollowUps(sortFollowUps(refreshed.followUps || []));
+        } catch { /* non-fatal */ }
+      }
       setEditing(false);
     } catch (err) {
       setEditError(err.message);
@@ -385,34 +392,84 @@ export default function LeadDetail() {
     }
   }
 
-  async function handleStatusChange(newStatus) {
+  async function handleSave() {
+    if (!editForm.customerName || !editForm.customerPhone) {
+      setEditError('Name and phone are required.');
+      return;
+    }
+    // If the edit form is transitioning the lead to a terminal status, ask
+    // for confirmation first (mirrors the quick-stage button flow).
+    const isTerminal = editForm.leadStatus === 'Converted' || editForm.leadStatus === 'Lost';
+    const isTransitioning = isTerminal && lead?.leadStatus !== editForm.leadStatus;
+    if (isTransitioning) {
+      const pendingCount = followUps.filter(f => f.happened !== 'Yes').length;
+      const followUpLine = pendingCount > 0
+        ? ` Any open follow-up${pendingCount > 1 ? 's' : ''} (${pendingCount}) will be marked as done automatically.`
+        : '';
+      const verb = editForm.leadStatus === 'Converted' ? 'mark as Converted' : 'mark as Lost';
+      setConfirmModal({
+        title: editForm.leadStatus === 'Converted' ? 'Mark Lead as Converted' : 'Mark Lead as Lost',
+        message: `Saving these changes will ${verb} for ${editForm.customerName || 'this lead'}.${followUpLine}`,
+        confirmLabel: 'Save & ' + (editForm.leadStatus === 'Converted' ? 'Mark Converted' : 'Mark Lost'),
+        variant: editForm.leadStatus === 'Converted' ? 'warning' : 'danger',
+        onConfirm: async () => {
+          await performSave();
+          setConfirmModal(null);
+        },
+      });
+      return;
+    }
+    await performSave();
+  }
+
+  // Apply a status change immediately. Backend auto-closes any pending
+  // follow-ups when the new status is Converted/Lost — we just refresh
+  // the local follow-ups list afterward to reflect that.
+  async function applyStatusChange(newStatus) {
     if (statusChanging) return;
     setStatusChanging(true);
     try {
       await updateLead(leadId, { leadStatus: newStatus });
       setLead(prev => ({ ...prev, leadStatus: newStatus }));
 
-      // Auto-close any pending follow-ups when lead is Converted or Lost
+      // Pull fresh follow-ups so the UI reflects the backend's auto-close.
       if (newStatus === 'Converted' || newStatus === 'Lost') {
-        const pending = followUps.filter(f => f.happened !== 'Yes');
-        if (pending.length > 0) {
-          const autoRemark = `Auto-closed: Lead marked as ${newStatus}`;
-          const updated = await Promise.all(
-            pending.map(f => markLeadFollowUpDone(leadId, f.followUpId, { remarks: autoRemark }))
-          );
-          setFollowUps(prev =>
-            sortFollowUps(prev.map(f => {
-              const done = updated.find(u => u.followUpId === f.followUpId);
-              return done ? done : f;
-            }))
-          );
-        }
+        try {
+          const refreshed = await fetchLeadById(leadId);
+          setFollowUps(sortFollowUps(refreshed.followUps || []));
+        } catch { /* non-fatal — backend already did the work */ }
       }
     } catch (err) {
       alert('Failed to update status: ' + err.message);
     } finally {
       setStatusChanging(false);
     }
+  }
+
+  // Public entry point used by the quick-stage buttons. For terminal
+  // statuses (Converted / Lost) we ask for confirmation first AND warn
+  // the user that any pending follow-ups will be auto-closed.
+  function handleStatusChange(newStatus) {
+    if (newStatus === 'Converted' || newStatus === 'Lost') {
+      const pendingCount = followUps.filter(f => f.happened !== 'Yes').length;
+      const followUpLine = pendingCount > 0
+        ? ` Any open follow-up${pendingCount > 1 ? 's' : ''} (${pendingCount}) will be marked as done automatically.`
+        : '';
+      const verb = newStatus === 'Converted' ? 'mark as Converted' : 'mark as Lost';
+      setConfirmModal({
+        title: newStatus === 'Converted' ? 'Mark Lead as Converted' : 'Mark Lead as Lost',
+        message: `Are you sure you want to ${verb} for ${lead?.customerName || 'this lead'}?${followUpLine}`,
+        confirmLabel: newStatus === 'Converted' ? 'Mark Converted' : 'Mark Lost',
+        variant: newStatus === 'Converted' ? 'warning' : 'danger',
+        onConfirm: async () => {
+          await applyStatusChange(newStatus);
+          setConfirmModal(null);
+        },
+      });
+      return;
+    }
+    // Non-terminal statuses: apply immediately, no confirmation.
+    applyStatusChange(newStatus);
   }
 
   function handleDelete() {
