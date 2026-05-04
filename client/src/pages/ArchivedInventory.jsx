@@ -4,7 +4,7 @@ import { ArrowLeft, Search, RefreshCw, Package, RotateCcw, Trash2 } from 'lucide
 import { useInventory } from '../hooks/useInventory';
 import { unarchiveProduct, deleteProduct } from '../services/api';
 import { formatCurrency } from '../utils/formatters';
-import Loader from '../components/Loader';
+import { ArchivedTableSkeleton } from '../components/Skeletons';
 import ErrorMessage from '../components/ErrorMessage';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -82,7 +82,7 @@ export default function ArchivedInventory() {
         />
       </form>
 
-      {loading && <Loader />}
+      {loading && <ArchivedTableSkeleton />}
       {error && <ErrorMessage message={error} />}
 
       {!loading && !error && (

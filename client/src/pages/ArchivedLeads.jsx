@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { fetchArchivedLeads, unarchiveLead, deleteLead } from '../services/api';
 import { StatusBadge } from './Leads';
-import Loader from '../components/Loader';
+import { ArchivedTableSkeleton } from '../components/Skeletons';
 import ConfirmModal from '../components/ConfirmModal';
 
 function parseProducts(str) {
@@ -130,7 +130,7 @@ export default function ArchivedLeads() {
       </div>
 
       {loading && (
-        <div className="flex items-center justify-center py-20"><Loader /></div>
+        <ArchivedTableSkeleton />
       )}
 
       {error && (

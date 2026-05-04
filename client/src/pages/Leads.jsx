@@ -17,7 +17,7 @@ import KpiCard from '../components/KpiCard';
 import InsightSection from '../components/InsightSection';
 import SearchableDropdown from '../components/SearchableDropdown';
 import TimePresetPicker from '../components/TimePresetPicker';
-import Loader from '../components/Loader';
+import { LeadsInsightsSkeleton, LeadsListSkeleton } from '../components/Skeletons';
 import ConfirmModal from '../components/ConfirmModal';
 
 // ── Constants ─────────────────────────────────────────────────
@@ -1155,7 +1155,7 @@ export default function Leads() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20"><Loader /></div>
+        tab === 'insights' ? <LeadsInsightsSkeleton /> : <LeadsListSkeleton />
       ) : error ? (
         <div className="text-center py-20 text-red-500 text-sm">{error}</div>
       ) : tab === 'insights' ? (

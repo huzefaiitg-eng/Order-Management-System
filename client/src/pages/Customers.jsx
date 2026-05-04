@@ -8,7 +8,7 @@ import { useCustomers } from '../hooks/useCustomers';
 import { useCustomerInsights } from '../hooks/useCustomerInsights';
 import { addCustomer, archiveCustomer } from '../services/api';
 import InsightSection from '../components/InsightSection';
-import Loader from '../components/Loader';
+import { CustomersInsightsSkeleton, CustomersListSkeleton } from '../components/Skeletons';
 import ErrorMessage from '../components/ErrorMessage';
 import ConfirmModal from '../components/ConfirmModal';
 import { formatCurrency, formatPercent } from '../utils/formatters';
@@ -283,10 +283,10 @@ export default function Customers() {
               </div>
             </div>
           )}
-          {loading && <Loader />}
+          {loading && <CustomersInsightsSkeleton />}
 
           {/* Insight Sections */}
-          {insightsLoading && <Loader />}
+          {insightsLoading && <CustomersInsightsSkeleton />}
           {insightsError && <ErrorMessage message={insightsError} />}
           {insightsData && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -427,7 +427,7 @@ export default function Customers() {
             </div>
           )}
 
-          {loading && <Loader />}
+          {loading && <CustomersListSkeleton />}
           {error && <ErrorMessage message={error} />}
 
           {!loading && !error && (

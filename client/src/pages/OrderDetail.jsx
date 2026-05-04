@@ -5,7 +5,7 @@ import { fetchOrders, updateOrderStatus, updatePaymentStatus, fetchOrderAudit, d
 import StatusBadge from '../components/StatusBadge';
 import StatusSelect from '../components/StatusSelect';
 import DetailOverlay from '../components/DetailOverlay';
-import Loader from '../components/Loader';
+import { OrderDetailSkeleton } from '../components/Skeletons';
 import ErrorMessage from '../components/ErrorMessage';
 import ConfirmModal from '../components/ConfirmModal';
 import { formatCurrency, ORDER_STATUSES, STATUS_COLORS } from '../utils/formatters';
@@ -119,7 +119,7 @@ export default function OrderDetail() {
     fetchOrderAudit(parseInt(rowIndex)).then(setAuditHistory).catch(() => {});
   };
 
-  if (loading) return <DetailOverlay fallback="/orders"><Loader /></DetailOverlay>;
+  if (loading) return <DetailOverlay fallback="/orders"><OrderDetailSkeleton /></DetailOverlay>;
   if (error) return <DetailOverlay fallback="/orders"><ErrorMessage message={error} /></DetailOverlay>;
   if (!order) return null;
 

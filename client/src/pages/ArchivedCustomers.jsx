@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Search, RefreshCw, User, Phone, Mail, MapPin, RotateCcw, Trash2 } from 'lucide-react';
 import { useCustomers } from '../hooks/useCustomers';
 import { unarchiveCustomer, deleteCustomer } from '../services/api';
-import Loader from '../components/Loader';
+import { ArchivedTableSkeleton } from '../components/Skeletons';
 import ErrorMessage from '../components/ErrorMessage';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -81,7 +81,7 @@ export default function ArchivedCustomers() {
         />
       </form>
 
-      {loading && <Loader />}
+      {loading && <ArchivedTableSkeleton />}
       {error && <ErrorMessage message={error} />}
 
       {!loading && !error && (

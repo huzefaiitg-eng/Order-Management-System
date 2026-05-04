@@ -10,7 +10,7 @@ import StockBadge from '../components/StockBadge';
 import StatusBadge from '../components/StatusBadge';
 import ProductImage from '../components/ProductImage';
 import DetailOverlay from '../components/DetailOverlay';
-import Loader from '../components/Loader';
+import { ProductDetailSkeleton, SkeletonTable } from '../components/Skeletons';
 import ErrorMessage from '../components/ErrorMessage';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -212,7 +212,7 @@ export default function ProductDetail() {
     }
   };
 
-  if (loading) return <DetailOverlay fallback="/inventory"><Loader /></DetailOverlay>;
+  if (loading) return <DetailOverlay fallback="/inventory"><ProductDetailSkeleton /></DetailOverlay>;
   if (error) return <DetailOverlay fallback="/inventory"><ErrorMessage message={error} /></DetailOverlay>;
   if (!product) return null;
 
@@ -712,7 +712,7 @@ export default function ProductDetail() {
             {stockTab === 'audit' && (
               <div>
                 {auditLoading ? (
-                  <Loader />
+                  <SkeletonTable rows={3} cols={4} />
                 ) : auditEntries.length === 0 ? (
                   <p className="text-sm text-gray-500">No stock changes recorded yet.</p>
                 ) : (

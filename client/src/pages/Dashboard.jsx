@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDashboard } from '../hooks/useDashboard';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useCardFilters } from '../hooks/useCardFilters';
-import Loader from '../components/Loader';
+import { DashboardSkeleton } from '../components/Skeletons';
 import ErrorMessage from '../components/ErrorMessage';
 import FilterableCard from '../components/FilterableCard';
 import CardFilterModal from '../components/CardFilterModal';
@@ -146,7 +146,7 @@ export default function Dashboard() {
     return { mode: 'single', data: computeRevenueOverTime(revenueChartOrders) };
   }, [revenueChartOrders, revenueChartFilters.applied]);
 
-  if (loading) return <Loader />;
+  if (loading) return <DashboardSkeleton />;
   if (error)   return <ErrorMessage message={error} />;
   if (!data)   return null;
 

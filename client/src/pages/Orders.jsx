@@ -6,7 +6,7 @@ import { useOrderInsights } from '../hooks/useOrderInsights';
 import StatusSelect from '../components/StatusSelect';
 import StatusBadge from '../components/StatusBadge';
 import InsightSection from '../components/InsightSection';
-import Loader from '../components/Loader';
+import { OrdersInsightsSkeleton, OrdersListSkeleton } from '../components/Skeletons';
 import ErrorMessage from '../components/ErrorMessage';
 import { formatCurrency, ORDER_SOURCES, ORDER_STATUSES, PAYMENT_MODES } from '../utils/formatters';
 import { fetchCustomers, fetchInventory, addOrder, addCustomer, addProduct, deleteOrder } from '../services/api';
@@ -246,7 +246,7 @@ export default function Orders() {
       {/* ─── Insights Tab ─── */}
       {activeTab === 'insights' && (
         <div>
-          {insightsLoading && <Loader />}
+          {insightsLoading && <OrdersInsightsSkeleton />}
           {insightsError && <ErrorMessage message={insightsError} />}
           {insightsData && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -373,7 +373,7 @@ export default function Orders() {
         </div>
       )}
 
-      {loading && <Loader />}
+      {loading && <OrdersListSkeleton />}
       {error && <ErrorMessage message={error} />}
 
       {!loading && !error && (

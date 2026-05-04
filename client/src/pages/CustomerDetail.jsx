@@ -5,7 +5,7 @@ import { fetchCustomerByPhone, updateOrderStatus, updateCustomer, archiveCustome
 import StatusBadge from '../components/StatusBadge';
 import StatusSelect from '../components/StatusSelect';
 import DetailOverlay from '../components/DetailOverlay';
-import Loader from '../components/Loader';
+import { CustomerDetailSkeleton } from '../components/Skeletons';
 import ErrorMessage from '../components/ErrorMessage';
 import ConfirmModal from '../components/ConfirmModal';
 import { formatCurrency } from '../utils/formatters';
@@ -89,7 +89,7 @@ export default function CustomerDetail() {
     }
   };
 
-  if (loading) return <DetailOverlay fallback="/customers"><Loader /></DetailOverlay>;
+  if (loading) return <DetailOverlay fallback="/customers"><CustomerDetailSkeleton /></DetailOverlay>;
   if (error) return <DetailOverlay fallback="/customers"><ErrorMessage message={error} /></DetailOverlay>;
   if (!customer) return null;
 

@@ -12,7 +12,7 @@ import {
 } from '../services/api';
 import { StatusBadge, LEAD_STATUSES, STATUS_CONFIG } from './Leads';
 import DetailOverlay from '../components/DetailOverlay';
-import Loader from '../components/Loader';
+import { LeadDetailSkeleton } from '../components/Skeletons';
 import ConfirmModal from '../components/ConfirmModal';
 import ProductLineEditor from '../components/ProductLineEditor';
 import { useAuth } from '../context/AuthContext';
@@ -515,7 +515,7 @@ export default function LeadDetail() {
   }
 
   if (loading) return (
-    <DetailOverlay fallback="/leads?tab=list"><div className="flex items-center justify-center py-24"><Loader /></div></DetailOverlay>
+    <DetailOverlay fallback="/leads?tab=list"><LeadDetailSkeleton /></DetailOverlay>
   );
 
   if (error) return (

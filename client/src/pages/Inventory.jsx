@@ -9,7 +9,7 @@ import { useCategories } from '../hooks/useCategories';
 import StockBadge from '../components/StockBadge';
 import ProductImage from '../components/ProductImage';
 import KpiCard from '../components/KpiCard';
-import Loader from '../components/Loader';
+import { InventoryInsightsSkeleton, InventoryListSkeleton } from '../components/Skeletons';
 import ErrorMessage from '../components/ErrorMessage';
 import { useInventoryInsights } from '../hooks/useInventoryInsights';
 import InsightSection from '../components/InsightSection';
@@ -500,7 +500,7 @@ export default function Inventory() {
             </Link>
           </div>
 
-          {insightsLoading && <Loader />}
+          {insightsLoading && <InventoryInsightsSkeleton />}
           {insightsError && <ErrorMessage message={insightsError} />}
 
           {insightsData && (
@@ -907,7 +907,7 @@ export default function Inventory() {
             </div>
           )}
 
-          {loading && <Loader />}
+          {loading && <InventoryListSkeleton />}
           {error && <ErrorMessage message={error} />}
 
           {!loading && !error && (
