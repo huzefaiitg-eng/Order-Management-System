@@ -153,11 +153,12 @@ export default function LeadDashboard() {
   useEffect(() => {
     let alive = true;
     fetchOrders()
-      .then(res => {
+      .then(orders => {
         if (!alive) return;
         const map = new Map();
-        (res.data || []).forEach(o => {
-          if (o.rowIndex) map.set(o.rowIndex, o);
+        (orders || []).forEach(o => {
+          const idx = Number(o.rowIndex);
+          if (idx) map.set(idx, o);
         });
         setConvertedOrdersMap(map);
       })
@@ -387,7 +388,7 @@ export default function LeadDashboard() {
         {sourcePerformance.length === 0 ? (
           <p className="text-sm text-gray-400 py-6 text-center">No source data in selected time range</p>
         ) : (() => {
-          const maxCount = Math.max(...sourcePerformance.map(s => s.leadCount), 1);
+          const totalLeads = globalInsights.filteredLeadCount || 1;
           return (
             <div className="overflow-x-auto -mx-5">
               <table className="w-full text-sm">
@@ -409,7 +410,7 @@ export default function LeadDashboard() {
                         <div className="mt-1.5 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full bg-terracotta-400"
-                            style={{ width: `${Math.round((s.leadCount / maxCount) * 100)}%` }}
+                            style={{ width: `${Math.round((s.leadCount / totalLeads) * 100)}%` }}
                           />
                         </div>
                       </td>

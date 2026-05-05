@@ -42,7 +42,7 @@ export default function Login() {
   }, []);
 
   if (user) {
-    return <Navigate to="/leads" replace />;
+    return <Navigate to="/leads/dashboard" replace />;
   }
 
   async function handleSubmit(e) {
@@ -51,7 +51,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/leads', { replace: true });
+      navigate('/leads/dashboard', { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
