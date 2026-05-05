@@ -1,22 +1,16 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  Target, TrendingUp, DollarSign, CalendarClock,
+  Target, CalendarClock,
   Plus, LayoutList, Columns3, Search, X, SlidersHorizontal,
-  Phone, Package, AlertCircle, RefreshCw, Lightbulb,
-  Flame, Zap, Snowflake, ArrowRight, TrendingDown, ArrowUpRight, Archive,
+  Phone, AlertCircle, RefreshCw, Lightbulb,
+  Flame, Zap, Snowflake, ArrowRight, TrendingDown, Archive,
+  AlertTriangle,
 } from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-} from 'recharts';
 import { useLeads } from '../hooks/useLeads';
 import { useLeadInsights } from '../hooks/useLeadInsights';
-import { addLead, updateLead, deleteLead, archiveLead, fetchInventory, fetchCustomers, addCustomer } from '../services/api';
-import { resolveTimeRange } from '../utils/dashboardAggregations';
-import KpiCard from '../components/KpiCard';
+import { updateLead, deleteLead, archiveLead } from '../services/api';
 import InsightSection from '../components/InsightSection';
-import SearchableDropdown from '../components/SearchableDropdown';
-import TimePresetPicker from '../components/TimePresetPicker';
 import { LeadsInsightsSkeleton, LeadsListSkeleton } from '../components/Skeletons';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -449,96 +443,22 @@ function FollowUpLeadCard({ lead, urgency }) {
   );
 }
 
-// ── Time Filter Mini-Modal ────────────────────────────────────
 
-const TIME_LABELS = {
-  all: 'All Time', today: 'Today', yesterday: 'Yesterday',
-  last7: 'Last 7 Days', last30: 'Last 30 Days', custom: 'Custom Range',
-};
-
-function TimeFilterModal({ open, onClose, preset, customRange, onChange }) {
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleKey(e) { if (e.key === 'Escape') onClose(); }
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 pointer-events-none">
-        <div
-          className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl pointer-events-auto animate-slide-up"
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal size={16} className="text-terracotta-600" />
-              <h2 className="text-sm font-semibold text-gray-900">Time Range Filter</h2>
-            </div>
-            <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500">
-              <X size={16} />
-            </button>
-          </div>
-          <div className="px-5 py-4">
-            <TimePresetPicker preset={preset} customRange={customRange} onChange={onChange} />
-          </div>
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
-            <button
-              onClick={() => { onChange({ preset: 'all', customRange: { startDate: '', endDate: '' } }); onClose(); }}
-              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 font-medium"
-            >
-              Clear
-            </button>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm bg-terracotta-600 text-white rounded-lg hover:bg-terracotta-700 font-medium"
-            >
-              Apply
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ── Insights Tab ──────────────────────────────────────────────
 
 const FOLLOWUP_PREVIEW = 5;
 
 function InsightsTab({ leads }) {
   const navigate = useNavigate();
-  const [timePreset, setTimePreset] = useState('all');
-  const [customRange, setCustomRange] = useState({ startDate: '', endDate: '' });
   const [followUpFilter, setFollowUpFilter] = useState('today');
-  const [timeFilterOpen, setTimeFilterOpen] = useState(false);
 
-  const timeRange = resolveTimeRange(timePreset, customRange);
-  const insights = useLeadInsights(leads, timeRange);
+  const insights = useLeadInsights(leads);
 
   const {
-    filteredLeadCount, filteredConvertedCount, filteredConversionRate,
-    totalPipelineValue, estimatedRevenue,
-    hotLeads, warmLeads, coldLeads, hotLeadRevenuePotential,
+    hotLeads, warmLeads, coldLeads,
     overdueFollowUps, followUpsTodayList, followUpsNext5Days,
-    topProducts, maxProductLeadCount,
-    byStatus, bySource,
-    totalLeads,
-    conversionRate,
+    staleLeads, recentlyLost, highValueAttention,
   } = insights;
 
-  // followUpsFilter tabs
   const followUpTabs = [
     { id: 'overdue', label: 'Overdue', list: overdueFollowUps },
     { id: 'today',   label: 'Today',   list: followUpsTodayList },
@@ -547,16 +467,7 @@ function InsightsTab({ leads }) {
   const activeFollowUps = followUpTabs.find(t => t.id === followUpFilter)?.list ?? [];
   const previewFollowUps = activeFollowUps.slice(0, FOLLOWUP_PREVIEW);
   const hiddenCount = activeFollowUps.length - FOLLOWUP_PREVIEW;
-
   const totalFollowUps = overdueFollowUps.length + followUpsTodayList.length + followUpsNext5Days.length;
-  const isTimeFiltered = timePreset !== 'all';
-
-  function formatCrore(v) {
-    if (v >= 10_000_000) return `₹${(v / 10_000_000).toFixed(1)}Cr`;
-    if (v >= 100_000)    return `₹${(v / 100_000).toFixed(1)}L`;
-    if (v >= 1_000)      return `₹${(v / 1_000).toFixed(1)}k`;
-    return `₹${v}`;
-  }
 
   function goToList(cls) {
     navigate(`/leads?tab=list${cls ? `&class=${cls}` : ''}`);
@@ -564,186 +475,36 @@ function InsightsTab({ leads }) {
 
   return (
     <div className="space-y-5">
-
-      {/* Time filter modal */}
-      <TimeFilterModal
-        open={timeFilterOpen}
-        onClose={() => setTimeFilterOpen(false)}
-        preset={timePreset}
-        customRange={customRange}
-        onChange={({ preset, customRange: cr }) => { setTimePreset(preset); setCustomRange(cr); }}
-      />
-
-      {/* ── Section 1: Combined Leads + Conversion with filter button ── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        {/* Card header — title left, filter button right */}
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">Lead Overview</h3>
-          <div className="flex items-center gap-2">
-            {isTimeFiltered && (
-              <button
-                onClick={() => { setTimePreset('all'); setCustomRange({ startDate: '', endDate: '' }); }}
-                className="flex items-center gap-1 text-xs text-terracotta-600 hover:text-terracotta-700 font-medium"
-              >
-                <X size={11} /> Clear
-              </button>
-            )}
-            <button
-              onClick={() => setTimeFilterOpen(true)}
-              className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border font-medium transition-colors ${
-                isTimeFiltered
-                  ? 'bg-terracotta-50 border-terracotta-300 text-terracotta-700'
-                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <SlidersHorizontal size={14} />
-              <span className="hidden sm:inline">
-                {isTimeFiltered ? TIME_LABELS[timePreset] || 'Custom' : 'All Time'}
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* KPI numbers */}
-        <div className="flex items-center gap-8">
-          <div>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-0.5">Total Leads</p>
-            <p className="text-3xl font-bold text-gray-900">{filteredLeadCount}</p>
-            {filteredConvertedCount > 0 && (
-              <p className="text-xs text-gray-400 mt-0.5">{filteredConvertedCount} converted</p>
-            )}
-          </div>
-          <div className="h-12 w-px bg-gray-100" />
-          <div>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-0.5">Conversion Rate</p>
-            <p className="text-3xl font-bold text-green-600">{filteredConversionRate}%</p>
-            <p className="text-xs text-gray-400 mt-0.5">Leads → Orders</p>
-          </div>
-        </div>
+      {/* ── Hot / Warm / Cold lead cards (first 10 + View all) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <ClassificationCard
+          title="Hot Leads"
+          icon={Flame}
+          accent="red"
+          tagline="Engaged + follow-up overdue or today"
+          leads={hotLeads}
+          onViewAll={() => goToList('hot')}
+        />
+        <ClassificationCard
+          title="Warm Leads"
+          icon={Zap}
+          accent="amber"
+          tagline="Follow-up scheduled or recently engaged"
+          leads={warmLeads}
+          onViewAll={() => goToList('warm')}
+        />
+        <ClassificationCard
+          title="Cold Leads"
+          icon={Snowflake}
+          accent="slate"
+          tagline="No engagement in 30+ days"
+          leads={coldLeads}
+          onViewAll={() => goToList('cold')}
+        />
       </div>
 
-      {/* ── Section 2: Hot / Warm / Cold classification ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* Hot */}
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex flex-col">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="p-1.5 bg-red-100 rounded-lg">
-              <Flame size={16} className="text-red-500" />
-            </div>
-            <span className="text-sm font-semibold text-red-800">Hot Leads</span>
-          </div>
-          <p className="text-3xl font-bold text-red-600 mb-0.5">{hotLeads.length}</p>
-          <p className="text-xs text-red-500 mb-2">Engaged + follow-up overdue or today</p>
-          {hotLeads.length > 0 && (
-            <p className="text-xs font-semibold text-red-700 mb-3">
-              {formatCrore(hotLeads.reduce((s, l) => s + (l.budget || 0), 0))} potential
-            </p>
-          )}
-          {hotLeads.length > 0 && (
-            <button
-              onClick={() => goToList('hot')}
-              className="mt-auto flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 self-start"
-            >
-              View all <ArrowRight size={12} />
-            </button>
-          )}
-        </div>
-
-        {/* Warm */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="p-1.5 bg-amber-100 rounded-lg">
-              <Zap size={16} className="text-amber-500" />
-            </div>
-            <span className="text-sm font-semibold text-amber-800">Warm Leads</span>
-          </div>
-          <p className="text-3xl font-bold text-amber-600 mb-0.5">{warmLeads.length}</p>
-          <p className="text-xs text-amber-600 mb-2">Follow-up scheduled or recently engaged</p>
-          {warmLeads.length > 0 && (
-            <p className="text-xs font-semibold text-amber-700 mb-3">
-              {formatCrore(warmLeads.reduce((s, l) => s + (l.budget || 0), 0))} potential
-            </p>
-          )}
-          {warmLeads.length > 0 && (
-            <button
-              onClick={() => goToList('warm')}
-              className="mt-auto flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800 self-start"
-            >
-              View all <ArrowRight size={12} />
-            </button>
-          )}
-        </div>
-
-        {/* Cold */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="p-1.5 bg-slate-100 rounded-lg">
-              <Snowflake size={16} className="text-slate-400" />
-            </div>
-            <span className="text-sm font-semibold text-slate-700">Cold Leads</span>
-          </div>
-          <p className="text-3xl font-bold text-slate-500 mb-0.5">{coldLeads.length}</p>
-          <p className="text-xs text-slate-500 mb-2">No engagement in 30+ days</p>
-          {coldLeads.length > 0 && (
-            <p className="text-xs text-slate-500 mb-3">Consider a re-engagement message</p>
-          )}
-          {coldLeads.length > 0 && (
-            <button
-              onClick={() => goToList('cold')}
-              className="mt-auto flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-700 self-start"
-            >
-              View all <ArrowRight size={12} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── Section 3: Pipeline Value with revenue estimates ── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="p-2 bg-blue-50 rounded-lg border border-blue-200">
-            <DollarSign size={16} className="text-blue-600" />
-          </div>
-          <h3 className="text-sm font-semibold text-gray-900">Pipeline Value</h3>
-        </div>
-
-        <div className="flex items-end gap-2 mb-4">
-          <p className="text-3xl font-bold text-gray-900">
-            {totalPipelineValue > 0 ? formatCrore(totalPipelineValue) : '—'}
-          </p>
-          <p className="text-sm text-gray-400 mb-1">total active pipeline</p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-            <div className="flex items-center gap-1.5 mb-1">
-              <ArrowUpRight size={14} className="text-green-600" />
-              <p className="text-xs font-medium text-green-700">Est. revenue at current rate</p>
-            </div>
-            <p className="text-xl font-bold text-green-700">
-              {estimatedRevenue > 0 ? formatCrore(estimatedRevenue) : '—'}
-            </p>
-            <p className="text-xs text-green-600 mt-0.5">
-              If {filteredConversionRate > 0 ? filteredConversionRate : conversionRate ?? 0}% of pipeline converts
-            </p>
-          </div>
-
-          <div className="bg-terracotta-50 border border-terracotta-200 rounded-lg p-3">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Flame size={14} className="text-terracotta-600" />
-              <p className="text-xs font-medium text-terracotta-700">If all hot leads convert</p>
-            </div>
-            <p className="text-xl font-bold text-terracotta-700">
-              {hotLeadRevenuePotential > 0 ? formatCrore(hotLeadRevenuePotential) : '—'}
-            </p>
-            <p className="text-xs text-terracotta-600 mt-0.5">{hotLeads.length} hot lead{hotLeads.length !== 1 ? 's' : ''}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Section 4: Follow-ups ── */}
+      {/* ── Follow-ups ── */}
       <div className="bg-white rounded-xl border border-gray-200">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-amber-50 rounded-lg border border-amber-200">
@@ -754,8 +515,6 @@ function InsightsTab({ leads }) {
               {totalFollowUps}
             </span>
           </div>
-
-          {/* Filter pills */}
           <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
             {followUpTabs.map(({ id, label, list }) => (
               <button
@@ -784,8 +543,6 @@ function InsightsTab({ leads }) {
             ))}
           </div>
         </div>
-
-        {/* Cards — preview 5, then "View all" */}
         <div className="divide-y divide-gray-50">
           {activeFollowUps.length === 0 ? (
             <div className="flex items-center gap-3 px-5 py-4">
@@ -822,89 +579,181 @@ function InsightsTab({ leads }) {
         </div>
       </div>
 
-      {/* ── Section 5: Product Demand ── */}
-      {topProducts.length > 0 && (
-        <InsightSection icon={Package} title="What Customers Want" count={topProducts.length} color="purple">
-          <div className="space-y-3">
-            {topProducts.map((product, i) => {
-              const barPct = Math.round((product.leadCount / (maxProductLeadCount || 1)) * 100);
-              const convRate = product.leadCount > 0
-                ? Math.round((product.convertedCount / product.leadCount) * 100)
-                : 0;
-              return (
-                <div key={product.name} className="relative">
-                  {/* Background bar */}
-                  <div
-                    className="absolute inset-y-0 left-0 bg-indigo-50 rounded-lg"
-                    style={{ width: `${barPct}%` }}
-                  />
-                  {/* Content */}
-                  <div className="relative flex items-center gap-3 px-3 py-2.5 rounded-lg">
-                    <span className="text-xs font-bold text-gray-400 w-5 shrink-0">#{i + 1}</span>
-                    <p className="text-sm font-medium text-gray-900 flex-1 truncate">{product.name}</p>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-gray-500">{product.leadCount} lead{product.leadCount !== 1 ? 's' : ''}</span>
-                      {convRate > 0 && (
-                        <span className="text-xs font-semibold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
-                          {convRate}% conv
-                        </span>
-                      )}
-                      {product.pipelineValue > 0 && (
-                        <span className="text-xs font-semibold text-indigo-600">
-                          ₹{(product.pipelineValue / 1000).toFixed(0)}k
-                        </span>
-                      )}
-                    </div>
+      {/* ── Stale Leads ── */}
+      <InsightSection
+        icon={AlertCircle}
+        title="Stale Leads"
+        count={staleLeads.length}
+        color="amber"
+      >
+        {staleLeads.length === 0 ? (
+          <p className="text-sm text-gray-400">No stale leads — everyone has a follow-up scheduled or has been recently created. 🎉</p>
+        ) : (
+          <>
+            <p className="text-xs text-gray-500 mb-3">Active leads with no follow-up scheduled, created over 7 days ago.</p>
+            <div className="space-y-2">
+              {staleLeads.slice(0, 10).map(lead => (
+                <Link
+                  key={lead.leadId}
+                  to={`/leads/${lead.leadId}`}
+                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-gray-900 truncate">{lead.customerName}</span>
+                    <StatusBadge status={lead.leadStatus} />
+                    {lead.leadSource && (
+                      <span className="text-xs text-gray-500 hidden sm:inline">{lead.leadSource}</span>
+                    )}
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </InsightSection>
-      )}
+                  <div className="flex items-center gap-2 shrink-0 text-xs">
+                    {lead.budget > 0 && (
+                      <span className="font-semibold text-amber-800">{formatBudget(lead.budget)}</span>
+                    )}
+                    <ArrowRight size={12} className="text-amber-600" />
+                  </div>
+                </Link>
+              ))}
+              {staleLeads.length > 10 && (
+                <button
+                  onClick={() => goToList()}
+                  className="flex items-center gap-1.5 text-sm font-medium text-amber-700 hover:text-amber-800 mt-1"
+                >
+                  <ArrowRight size={13} />
+                  View all {staleLeads.length} in All Leads
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </InsightSection>
 
-      {/* ── Section 6: Charts ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Funnel */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Lead Pipeline</h3>
-          {totalLeads === 0 ? (
-            <p className="text-sm text-gray-400 py-4 text-center">No leads yet</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={byStatus} layout="vertical" margin={{ left: 10, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="status" tick={{ fontSize: 11 }} width={72} />
-                <Tooltip formatter={(v) => [v, 'Leads']} />
-                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                  {byStatus.map(entry => (
-                    <Cell key={entry.status} fill={STATUS_CONFIG[entry.status]?.color || '#94A3B8'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+      {/* ── High-Value Leads Needing Attention ── */}
+      <InsightSection
+        icon={AlertTriangle}
+        title="High-Value Leads Needing Attention"
+        count={highValueAttention.length}
+        color="red"
+      >
+        {highValueAttention.length === 0 ? (
+          <p className="text-sm text-gray-400">No high-value leads slipping. Keep it up.</p>
+        ) : (
+          <>
+            <p className="text-xs text-gray-500 mb-3">Top-budget leads with no contact in 5+ days. Don&apos;t lose these.</p>
+            <div className="space-y-2">
+              {highValueAttention.slice(0, 10).map(lead => (
+                <Link
+                  key={lead.leadId}
+                  to={`/leads/${lead.leadId}`}
+                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-gray-900 truncate">{lead.customerName}</span>
+                    <StatusBadge status={lead.leadStatus} />
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 text-xs">
+                    <span className="font-semibold text-red-700">{formatBudget(lead.budget)}</span>
+                    <ArrowRight size={12} className="text-red-600" />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
+      </InsightSection>
 
-        {/* By Source */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Leads by Source</h3>
-          {bySource.length === 0 ? (
-            <p className="text-sm text-gray-400 py-4 text-center">No source data yet</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={bySource} margin={{ right: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="source" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v) => [v, 'Leads']} />
-                <Bar dataKey="count" fill="#C8956C" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+      {/* ── Recently Lost ── */}
+      <InsightSection
+        icon={TrendingDown}
+        title="Recently Lost"
+        count={recentlyLost.length}
+        color="slate"
+      >
+        {recentlyLost.length === 0 ? (
+          <p className="text-sm text-gray-400">No leads lost in the last 30 days.</p>
+        ) : (
+          <>
+            <p className="text-xs text-gray-500 mb-3">Leads marked Lost in the last 30 days. Look for patterns by source or budget.</p>
+            <div className="space-y-2">
+              {recentlyLost.map(lead => (
+                <Link
+                  key={lead.leadId}
+                  to={`/leads/${lead.leadId}`}
+                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-gray-700 truncate">{lead.customerName}</span>
+                    {lead.leadSource && (
+                      <span className="text-xs bg-white border border-gray-200 text-gray-600 px-1.5 py-0.5 rounded">{lead.leadSource}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 text-xs">
+                    {lead.budget > 0 && (
+                      <span className="text-gray-600">{formatBudget(lead.budget)}</span>
+                    )}
+                    <span className="text-gray-400">{lead.leadDate}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
+      </InsightSection>
+    </div>
+  );
+}
+
+// Hot/Warm/Cold card showing first 10 leads with View All
+function ClassificationCard({ title, icon: Icon, accent, tagline, leads, onViewAll }) {
+  const accentMap = {
+    red:    { bg: 'bg-red-50',    border: 'border-red-200',    iconBg: 'bg-red-100',    iconClr: 'text-red-500',   titleClr: 'text-red-800',   countClr: 'text-red-600',   tagClr: 'text-red-500',   linkClr: 'text-red-600 hover:text-red-700' },
+    amber:  { bg: 'bg-amber-50',  border: 'border-amber-200',  iconBg: 'bg-amber-100',  iconClr: 'text-amber-500', titleClr: 'text-amber-800', countClr: 'text-amber-600', tagClr: 'text-amber-600', linkClr: 'text-amber-700 hover:text-amber-800' },
+    slate:  { bg: 'bg-slate-50',  border: 'border-slate-200',  iconBg: 'bg-slate-100',  iconClr: 'text-slate-400', titleClr: 'text-slate-700', countClr: 'text-slate-500', tagClr: 'text-slate-500', linkClr: 'text-slate-600 hover:text-slate-700' },
+  };
+  const c = accentMap[accent] || accentMap.amber;
+  const totalBudget = leads.reduce((s, l) => s + (l.budget || 0), 0);
+  const previewLeads = leads.slice(0, 10);
+  const hidden = leads.length - previewLeads.length;
+
+  return (
+    <div className={`${c.bg} border ${c.border} rounded-xl p-4 flex flex-col`}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className={`p-1.5 ${c.iconBg} rounded-lg`}>
+          <Icon size={16} className={c.iconClr} />
         </div>
+        <span className={`text-sm font-semibold ${c.titleClr}`}>{title}</span>
       </div>
+      <p className={`text-3xl font-bold ${c.countClr} mb-0.5`}>{leads.length}</p>
+      <p className={`text-xs ${c.tagClr} mb-2`}>{tagline}</p>
+      {totalBudget > 0 && (
+        <p className={`text-xs font-semibold ${c.titleClr} mb-3`}>
+          {formatBudget(totalBudget)} potential
+        </p>
+      )}
+      {previewLeads.length > 0 && (
+        <ul className="space-y-1 mb-3 max-h-72 overflow-y-auto">
+          {previewLeads.map(lead => (
+            <li key={lead.leadId}>
+              <Link
+                to={`/leads/${lead.leadId}`}
+                className="flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-white/60 transition-colors"
+              >
+                <span className="text-xs text-gray-800 truncate flex-1">{lead.customerName}</span>
+                {lead.budget > 0 && (
+                  <span className="text-[11px] text-gray-600 shrink-0">{formatBudget(lead.budget)}</span>
+                )}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {leads.length > 0 && (
+        <button
+          onClick={onViewAll}
+          className={`mt-auto flex items-center gap-1 text-xs font-semibold ${c.linkClr} self-start`}
+        >
+          {hidden > 0 ? `View all ${leads.length}` : 'View in list'} <ArrowRight size={12} />
+        </button>
+      )}
     </div>
   );
 }
@@ -1136,8 +985,8 @@ export default function Leads() {
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
         {[
-          { id: 'insights', label: 'Insights',  icon: Lightbulb },
-          { id: 'list',     label: `All Leads${leads.length > 0 ? ` (${leads.length})` : ''}`, icon: LayoutList },
+          { id: 'insights',  label: 'Insights',  icon: Lightbulb },
+          { id: 'list',      label: `All Leads${leads.length > 0 ? ` (${leads.length})` : ''}`, icon: LayoutList },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -1155,7 +1004,7 @@ export default function Leads() {
       </div>
 
       {loading ? (
-        tab === 'insights' ? <LeadsInsightsSkeleton /> : <LeadsListSkeleton />
+        tab === 'list' ? <LeadsListSkeleton /> : <LeadsInsightsSkeleton />
       ) : error ? (
         <div className="text-center py-20 text-red-500 text-sm">{error}</div>
       ) : tab === 'insights' ? (

@@ -19,6 +19,7 @@ import ArchivedInventory from './pages/ArchivedInventory';
 import SettingsPage from './pages/Settings';
 import LandingPage from './pages/LandingPage';
 import Leads from './pages/Leads';
+import LeadDashboard from './pages/LeadDashboard';
 import LeadDetail from './pages/LeadDetail';
 import AddLead from './pages/AddLead';
 import ArchivedLeads from './pages/ArchivedLeads';
@@ -99,6 +100,7 @@ export default function App() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/leads" element={<Leads />} />
+                <Route path="/leads/dashboard" element={<LeadDashboard />} />
                 <Route path="/leads/new" element={<AddLead />} />
                 <Route path="/leads/archived" element={<ArchivedLeads />} />
                 <Route path="/leads/:leadId" element={<LeadDetail />} />

@@ -12,8 +12,9 @@ const NAV_SECTIONS = [
   {
     label: 'Lead Management',
     items: [
-      { path: '/leads',     label: 'Leads',     icon: Target },
-      { path: '/customers', label: 'Customers', icon: Users  },
+      { path: '/leads/dashboard', label: 'Lead Dashboard', icon: LayoutDashboard },
+      { path: '/leads',           label: 'Leads',          icon: Target },
+      { path: '/customers',       label: 'Customers',      icon: Users  },
     ],
   },
   {
@@ -40,6 +41,7 @@ function getInitials(name) {
 }
 
 function isNavActive(pathname, path) {
+  if (path === '/leads') return pathname === '/leads' || (pathname.startsWith('/leads/') && !pathname.startsWith('/leads/dashboard'));
   return pathname.startsWith(path);
 }
 

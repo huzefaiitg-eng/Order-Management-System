@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { resolveTimeRange, parseOrderDate } from '../utils/dashboardAggregations';
 
 const LEAD_STATUSES = ['New Lead', 'Contacted', 'Interested', 'Converted', 'Lost'];
+const LEAD_SOURCES = ['WhatsApp', 'Instagram', 'Facebook', 'Referral', 'Walk-in/Offline'];
+const ACTIVE_STATUSES = ['New Lead', 'Contacted', 'Interested'];
 
 /** Parse a DD/MM/YYYY string into a midnight Date. Returns null on bad input. */
 function parseLeadDate(str) {
@@ -42,33 +44,58 @@ function parseProducts(str) {
 }
 
 /**
- * useLeadInsights(leads, timeRange)
+ * useLeadInsights(leads, timeRange, options)
  *
  * Pure memoised analytics over the leads array.
  * timeRange = { start: Date|null, end: Date|null }  — from resolveTimeRange()
- * Each lead may carry a `nextFollowUp: { followUpId, date } | null` field from GET /api/leads.
+ * options.sourceFilter = string[] — limit aggregations to these sources (empty = all)
+ * options.convertedOrdersMap = Map<rowIndex, order> — for realized revenue/profit
+ * options.inventory = array of inventory products — for leads-vs-inventory breakdown
  */
-export function useLeadInsights(leads = [], timeRange = { start: null, end: null }) {
+export function useLeadInsights(leads = [], timeRange = { start: null, end: null }, options = {}) {
+  const { sourceFilter = [], convertedOrdersMap = null, inventory = [] } = options;
+
   return useMemo(() => {
     const todayStr = todayDateString();
     const todayMidnight = todayDate();
 
-    // ── FILTERED totals (respect timeRange on leadDate) ──────────────────────
-    const filteredLeads = timeRange.start || timeRange.end
-      ? leads.filter(l => {
-          const d = parseLeadDate(l.leadDate);
-          if (!d) return false;
-          if (timeRange.start && d < timeRange.start) return false;
-          if (timeRange.end && d > timeRange.end) return false;
-          return true;
-        })
-      : leads;
+    // ── Apply time + source filters together ────────────────────────────────
+    const sourceSet = sourceFilter.length ? new Set(sourceFilter) : null;
+    const passesFilter = (l) => {
+      if (sourceSet && !sourceSet.has(l.leadSource)) return false;
+      if (timeRange.start || timeRange.end) {
+        const d = parseLeadDate(l.leadDate);
+        if (!d) return false;
+        if (timeRange.start && d < timeRange.start) return false;
+        if (timeRange.end && d > timeRange.end) return false;
+      }
+      return true;
+    };
+
+    const filteredLeads = leads.filter(passesFilter);
 
     const filteredLeadCount = filteredLeads.length;
     const filteredConvertedCount = filteredLeads.filter(l => l.leadStatus === 'Converted').length;
     const filteredConversionRate = filteredLeadCount > 0
       ? Math.round((filteredConvertedCount / filteredLeadCount) * 100)
       : 0;
+
+    // ── Realized revenue / profit (from converted leads' linked orders) ─────
+    let realizedRevenue = 0;
+    let realizedProfit = 0;
+    if (convertedOrdersMap) {
+      filteredLeads.forEach(l => {
+        if (l.leadStatus !== 'Converted') return;
+        const rowIdx = parseInt(l.convertedOrderRow, 10);
+        if (!rowIdx) return;
+        const order = convertedOrdersMap.get(rowIdx);
+        if (!order) return;
+        const pricePaid = Number(order.pricePaid) || 0;
+        const cost = Number(order.productCost) || 0;
+        realizedRevenue += pricePaid;
+        realizedProfit += (pricePaid - cost);
+      });
+    }
 
     // ── GLOBAL totals ─────────────────────────────────────────────────────────
     const totalLeads = leads.length;
@@ -78,24 +105,25 @@ export function useLeadInsights(leads = [], timeRange = { start: null, end: null
 
     // Active = not Converted / not Lost
     const activeLeads = leads.filter(l => l.leadStatus !== 'Converted' && l.leadStatus !== 'Lost');
+    const filteredActiveLeads = filteredLeads.filter(l => l.leadStatus !== 'Converted' && l.leadStatus !== 'Lost');
 
-    // ── PIPELINE VALUE ────────────────────────────────────────────────────────
-    const totalPipelineValue = activeLeads.reduce((sum, l) => sum + (l.budget || 0), 0);
-    const avgBudget = activeLeads.length > 0
-      ? Math.round(totalPipelineValue / activeLeads.length)
+    // ── PIPELINE VALUE (filtered by source/time) ──────────────────────────────
+    const totalPipelineValue = filteredActiveLeads.reduce((sum, l) => sum + (l.budget || 0), 0);
+    const avgBudget = filteredActiveLeads.length > 0
+      ? Math.round(totalPipelineValue / filteredActiveLeads.length)
       : 0;
 
     // Estimated revenue at current conversion rate
-    const estimatedRevenue = Math.round(totalPipelineValue * (conversionRate / 100));
+    const estimatedRevenue = Math.round(totalPipelineValue * (filteredConversionRate / 100));
 
-    // ── CLASSIFICATION ────────────────────────────────────────────────────────
-    // Uses lead.nextFollowUp?.date (earliest pending follow-up, from GET /api/leads)
-    //
-    // HOT: Active + Interested + nextFollowUp date is today or overdue
-    // WARM: Active + has a future nextFollowUp (next 1–14 days) OR status = Interested without overdue
-    // COLD: Active + New Lead | Contacted + no nextFollowUp + leadAge > 30 days
-    // Everything else = Warm
+    // Pipeline by status (for the Pipeline Value card breakdown)
+    const pipelineByStatus = ACTIVE_STATUSES.map(status => ({
+      status,
+      count: filteredActiveLeads.filter(l => l.leadStatus === status).length,
+      value: filteredActiveLeads.filter(l => l.leadStatus === status).reduce((s, l) => s + (l.budget || 0), 0),
+    }));
 
+    // ── CLASSIFICATION (uses ALL leads — not filtered) ──────────────────────
     const in14Days = new Date(todayMidnight);
     in14Days.setDate(in14Days.getDate() + 14);
 
@@ -124,15 +152,13 @@ export function useLeadInsights(leads = [], timeRange = { start: null, end: null
       } else if (isColdCandidate) {
         coldLeads.push(lead);
       } else {
-        warmLeads.push(lead); // default bucket
+        warmLeads.push(lead);
       }
     });
 
-    // Estimated revenue if all hot leads convert
     const hotLeadRevenuePotential = hotLeads.reduce((sum, l) => sum + (l.budget || 0), 0);
 
     // ── FOLLOW-UP BUCKETS ─────────────────────────────────────────────────────
-    // Use lead.nextFollowUp?.date (earliest pending follow-up per lead)
     const tomorrow = new Date(todayMidnight);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const in5Days = new Date(todayMidnight);
@@ -150,41 +176,100 @@ export function useLeadInsights(leads = [], timeRange = { start: null, end: null
       return d && d >= tomorrow && d <= in5Days;
     });
 
-    // Legacy alias
     const followUpsDueToday = followUpsTodayList;
 
     // ── PRODUCT DEMAND ────────────────────────────────────────────────────────
-    const productMap = {}; // { productName: { leadCount, convertedCount, pipelineValue } }
+    // Use productLines when present (contains articleId for inventory match);
+    // fall back to productsInterested string for legacy leads.
+    const productMap = {};
 
     leads.forEach(lead => {
-      const products = parseProducts(lead.productsInterested);
       const isConverted = lead.leadStatus === 'Converted';
       const isActive = lead.leadStatus !== 'Converted' && lead.leadStatus !== 'Lost';
 
-      products.forEach(name => {
-        if (!productMap[name]) {
-          productMap[name] = { name, leadCount: 0, convertedCount: 0, pipelineValue: 0 };
-        }
-        productMap[name].leadCount += 1;
-        if (isConverted) productMap[name].convertedCount += 1;
-        if (isActive) productMap[name].pipelineValue += (lead.budget || 0);
-      });
+      if (Array.isArray(lead.productLines) && lead.productLines.length > 0) {
+        lead.productLines.forEach(line => {
+          const name = (line.productName || '').trim();
+          if (!name) return;
+          if (!productMap[name]) {
+            productMap[name] = {
+              name,
+              leadCount: 0,
+              convertedCount: 0,
+              pipelineValue: 0,
+              totalQty: 0,
+              articleId: line.articleId || '',
+              isInventory: !!line.articleId,
+            };
+          }
+          productMap[name].leadCount += 1;
+          productMap[name].totalQty += Number(line.quantity) || 0;
+          if (isConverted) productMap[name].convertedCount += 1;
+          if (isActive) productMap[name].pipelineValue += (lead.budget || 0);
+          // Promote to inventory if any line linked it
+          if (line.articleId) {
+            productMap[name].articleId = line.articleId;
+            productMap[name].isInventory = true;
+          }
+        });
+      } else {
+        const products = parseProducts(lead.productsInterested);
+        products.forEach(name => {
+          if (!productMap[name]) {
+            productMap[name] = {
+              name, leadCount: 0, convertedCount: 0, pipelineValue: 0, totalQty: 0,
+              articleId: '', isInventory: false,
+            };
+          }
+          productMap[name].leadCount += 1;
+          if (isConverted) productMap[name].convertedCount += 1;
+          if (isActive) productMap[name].pipelineValue += (lead.budget || 0);
+        });
+      }
     });
 
-    const topProducts = Object.values(productMap)
-      .sort((a, b) => b.leadCount - a.leadCount)
-      .slice(0, 8);
-
+    const allProducts = Object.values(productMap);
+    const topProducts = [...allProducts].sort((a, b) => b.leadCount - a.leadCount).slice(0, 8);
     const maxProductLeadCount = topProducts.length > 0 ? topProducts[0].leadCount : 1;
+
+    // ── LEADS vs INVENTORY breakdown ──────────────────────────────────────────
+    // If we have inventory data, cross-check product names too (legacy leads
+    // may have matching names without articleId).
+    const inventoryNameSet = new Set((inventory || []).map(p => (p.productName || '').toLowerCase()));
+    const leadsVsInventory = (() => {
+      let matchedDemand = 0;
+      let customDemand = 0;
+      const matchedList = [];
+      const customList = [];
+      allProducts.forEach(p => {
+        const isMatched = p.isInventory || inventoryNameSet.has(p.name.toLowerCase());
+        if (isMatched) {
+          matchedDemand += p.leadCount;
+          matchedList.push({ ...p, isInventory: true });
+        } else {
+          customDemand += p.leadCount;
+          customList.push({ ...p, isInventory: false });
+        }
+      });
+      const total = matchedDemand + customDemand;
+      const matchedPct = total > 0 ? Math.round((matchedDemand / total) * 100) : 0;
+      return {
+        matchedDemand,
+        customDemand,
+        matchedPct,
+        topMatched: matchedList.sort((a, b) => b.leadCount - a.leadCount).slice(0, 10),
+        topCustom: customList.sort((a, b) => b.leadCount - a.leadCount).slice(0, 10),
+      };
+    })();
 
     // ── BY STATUS / SOURCE ────────────────────────────────────────────────────
     const byStatus = LEAD_STATUSES.map(status => ({
       status,
-      count: leads.filter(l => l.leadStatus === status).length,
+      count: filteredLeads.filter(l => l.leadStatus === status).length,
     }));
 
     const sourceMap = {};
-    leads.forEach(l => {
+    filteredLeads.forEach(l => {
       const src = l.leadSource || 'Unknown';
       sourceMap[src] = (sourceMap[src] || 0) + 1;
     });
@@ -192,20 +277,95 @@ export function useLeadInsights(leads = [], timeRange = { start: null, end: null
       .map(([source, count]) => ({ source, count }))
       .sort((a, b) => b.count - a.count);
 
+    // ── SOURCE PERFORMANCE — per-source decision matrix ───────────────────────
+    const sourcePerformance = LEAD_SOURCES.map(src => {
+      const srcLeads = filteredLeads.filter(l => l.leadSource === src);
+      const converted = srcLeads.filter(l => l.leadStatus === 'Converted');
+      let revenue = 0;
+      let profit = 0;
+      if (convertedOrdersMap) {
+        converted.forEach(l => {
+          const rowIdx = parseInt(l.convertedOrderRow, 10);
+          if (!rowIdx) return;
+          const order = convertedOrdersMap.get(rowIdx);
+          if (!order) return;
+          const pricePaid = Number(order.pricePaid) || 0;
+          const cost = Number(order.productCost) || 0;
+          revenue += pricePaid;
+          profit += (pricePaid - cost);
+        });
+      }
+      const avgBudget = srcLeads.length > 0
+        ? Math.round(srcLeads.reduce((s, l) => s + (l.budget || 0), 0) / srcLeads.length)
+        : 0;
+      return {
+        source: src,
+        leadCount: srcLeads.length,
+        convertedCount: converted.length,
+        conversionRate: srcLeads.length > 0 ? Math.round((converted.length / srcLeads.length) * 100) : 0,
+        avgBudget,
+        revenue,
+        profit,
+      };
+    }).filter(s => s.leadCount > 0).sort((a, b) => b.revenue - a.revenue || b.leadCount - a.leadCount);
+
+    // ── STALE LEADS ───────────────────────────────────────────────────────────
+    // Active status, no follow-up scheduled, and createdAt > 7 days ago.
+    const sevenDaysAgo = new Date(todayMidnight);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const staleLeads = activeLeads.filter(l => {
+      if (l.nextFollowUp?.date) return false;
+      const created = l.createdAt ? new Date(l.createdAt) : parseLeadDate(l.leadDate);
+      return created && created < sevenDaysAgo;
+    }).sort((a, b) => {
+      const da = a.createdAt ? new Date(a.createdAt) : parseLeadDate(a.leadDate) || new Date(0);
+      const db = b.createdAt ? new Date(b.createdAt) : parseLeadDate(b.leadDate) || new Date(0);
+      return da - db; // oldest first
+    });
+
+    // ── RECENTLY LOST ─────────────────────────────────────────────────────────
+    const thirtyDaysAgo = new Date(todayMidnight);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const recentlyLost = leads.filter(l => {
+      if (l.leadStatus !== 'Lost') return false;
+      const d = l.createdAt ? new Date(l.createdAt) : parseLeadDate(l.leadDate);
+      return d && d >= thirtyDaysAgo;
+    }).sort((a, b) => {
+      const da = a.createdAt ? new Date(a.createdAt) : parseLeadDate(a.leadDate) || new Date(0);
+      const db = b.createdAt ? new Date(b.createdAt) : parseLeadDate(b.leadDate) || new Date(0);
+      return db - da;
+    }).slice(0, 10);
+
+    // ── HIGH-VALUE LEADS NEEDING ATTENTION ────────────────────────────────────
+    // Top quartile budget AND last contact (createdAt or leadDate) > 5 days ago.
+    const fiveDaysAgo = new Date(todayMidnight);
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+    const budgets = activeLeads.map(l => l.budget || 0).filter(b => b > 0).sort((a, b) => a - b);
+    const q3Index = Math.floor(budgets.length * 0.75);
+    const budgetThreshold = budgets.length > 0 ? budgets[q3Index] || budgets[budgets.length - 1] : 0;
+    const highValueAttention = activeLeads.filter(l => {
+      if ((l.budget || 0) < budgetThreshold || budgetThreshold === 0) return false;
+      const d = l.createdAt ? new Date(l.createdAt) : parseLeadDate(l.leadDate);
+      return d && d < fiveDaysAgo;
+    }).sort((a, b) => (b.budget || 0) - (a.budget || 0));
+
     return {
       // Global
       totalLeads,
       newThisMonth,
       conversionRate,
       convertedCount,
-      totalPipelineValue,
-      avgBudget,
-      estimatedRevenue,
 
-      // Time-filtered
+      // Filtered (respects time + source)
       filteredLeadCount,
       filteredConvertedCount,
       filteredConversionRate,
+      totalPipelineValue,
+      avgBudget,
+      estimatedRevenue,
+      pipelineByStatus,
+      realizedRevenue,
+      realizedProfit,
 
       // Classification
       hotLeads,
@@ -213,19 +373,28 @@ export function useLeadInsights(leads = [], timeRange = { start: null, end: null
       coldLeads,
       hotLeadRevenuePotential,
 
-      // Follow-up buckets
+      // Follow-ups
       overdueFollowUps,
       followUpsTodayList,
       followUpsNext5Days,
-      followUpsDueToday, // legacy alias
+      followUpsDueToday,
 
       // Product demand
       topProducts,
       maxProductLeadCount,
+      leadsVsInventory,
 
       // Charts
       byStatus,
       bySource,
+
+      // Source decision matrix
+      sourcePerformance,
+
+      // Operational triage
+      staleLeads,
+      recentlyLost,
+      highValueAttention,
     };
-  }, [leads, timeRange]);
+  }, [leads, timeRange, sourceFilter, convertedOrdersMap, inventory]);
 }
