@@ -10,7 +10,6 @@ import {
 import { useLeads } from '../hooks/useLeads';
 import { useLeadInsights } from '../hooks/useLeadInsights';
 import { updateLead, deleteLead, archiveLead } from '../services/api';
-import InsightSection from '../components/InsightSection';
 import { LeadsInsightsSkeleton, LeadsListSkeleton } from '../components/Skeletons';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -580,180 +579,198 @@ function InsightsTab({ leads }) {
       </div>
 
       {/* ── Stale Leads ── */}
-      <InsightSection
-        icon={AlertCircle}
-        title="Stale Leads"
-        count={staleLeads.length}
-        color="amber"
-      >
-        {staleLeads.length === 0 ? (
-          <p className="text-sm text-gray-400">No stale leads — everyone has a follow-up scheduled or has been recently created. 🎉</p>
-        ) : (
-          <>
-            <p className="text-xs text-gray-500 mb-3">Active leads with no follow-up scheduled, created over 7 days ago.</p>
-            <div className="space-y-2">
-              {staleLeads.slice(0, 10).map(lead => (
-                <Link
-                  key={lead.leadId}
-                  to={`/leads/${lead.leadId}`}
-                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm font-medium text-gray-900 truncate">{lead.customerName}</span>
-                    <StatusBadge status={lead.leadStatus} />
-                    {lead.leadSource && (
-                      <span className="text-xs text-gray-500 hidden sm:inline">{lead.leadSource}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 text-xs">
-                    {lead.budget > 0 && (
-                      <span className="font-semibold text-amber-800">{formatBudget(lead.budget)}</span>
-                    )}
-                    <ArrowRight size={12} className="text-amber-600" />
-                  </div>
-                </Link>
-              ))}
-              {staleLeads.length > 10 && (
-                <button
-                  onClick={() => goToList()}
-                  className="flex items-center gap-1.5 text-sm font-medium text-amber-700 hover:text-amber-800 mt-1"
-                >
-                  <ArrowRight size={13} />
-                  View all {staleLeads.length} in All Leads
-                </button>
-              )}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl flex flex-col">
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-amber-100 rounded-lg">
+              <AlertCircle size={16} className="text-amber-500" />
             </div>
-          </>
-        )}
-      </InsightSection>
+            <span className="text-sm font-semibold text-gray-900">Stale Leads</span>
+          </div>
+          <span className="text-sm font-bold text-amber-600 bg-amber-100 rounded-lg px-2.5 py-1">
+            {staleLeads.length}
+          </span>
+        </div>
+        <p className="text-xs text-amber-600 px-4 pb-3">No follow-up scheduled, created over 7 days ago</p>
+        <div className="border-t border-black/5 flex-1">
+          {staleLeads.length === 0 ? (
+            <p className="text-sm text-gray-400 px-4 py-6 text-center">No stale leads — great job!</p>
+          ) : (
+            <>
+              <ul className="max-h-80 overflow-y-auto py-1">
+                {staleLeads.slice(0, 10).map(lead => (
+                  <li key={lead.leadId}>
+                    <Link
+                      to={`/leads/${lead.leadId}`}
+                      className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-white/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm text-gray-800 truncate">{lead.customerName}</span>
+                        <StatusBadge status={lead.leadStatus} />
+                      </div>
+                      <span className="text-sm font-medium text-gray-600 shrink-0">
+                        {lead.budget > 0 ? formatBudget(lead.budget) : ''}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {staleLeads.length > 10 && (
+                <div className="px-4 pb-3 pt-1">
+                  <button
+                    onClick={() => goToList()}
+                    className="flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800"
+                  >
+                    View all {staleLeads.length} <ArrowRight size={12} />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
       {/* ── High-Value Leads Needing Attention ── */}
-      <InsightSection
-        icon={AlertTriangle}
-        title="High-Value Leads Needing Attention"
-        count={highValueAttention.length}
-        color="red"
-      >
-        {highValueAttention.length === 0 ? (
-          <p className="text-sm text-gray-400">No high-value leads slipping. Keep it up.</p>
-        ) : (
-          <>
-            <p className="text-xs text-gray-500 mb-3">Top-budget leads with no contact in 5+ days. Don&apos;t lose these.</p>
-            <div className="space-y-2">
-              {highValueAttention.slice(0, 10).map(lead => (
-                <Link
-                  key={lead.leadId}
-                  to={`/leads/${lead.leadId}`}
-                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm font-medium text-gray-900 truncate">{lead.customerName}</span>
-                    <StatusBadge status={lead.leadStatus} />
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 text-xs">
-                    <span className="font-semibold text-red-700">{formatBudget(lead.budget)}</span>
-                    <ArrowRight size={12} className="text-red-600" />
-                  </div>
-                </Link>
-              ))}
+      <div className="bg-red-50 border border-red-200 rounded-xl flex flex-col">
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-red-100 rounded-lg">
+              <AlertTriangle size={16} className="text-red-500" />
             </div>
-          </>
-        )}
-      </InsightSection>
+            <span className="text-sm font-semibold text-gray-900">High-Value Needs Attention</span>
+          </div>
+          <span className="text-sm font-bold text-red-600 bg-red-100 rounded-lg px-2.5 py-1">
+            {highValueAttention.length}
+          </span>
+        </div>
+        <p className="text-xs text-red-500 px-4 pb-3">Top-budget leads with no contact in 5+ days</p>
+        <div className="border-t border-black/5 flex-1">
+          {highValueAttention.length === 0 ? (
+            <p className="text-sm text-gray-400 px-4 py-6 text-center">No high-value leads slipping. Keep it up.</p>
+          ) : (
+            <ul className="max-h-80 overflow-y-auto py-1">
+              {highValueAttention.slice(0, 10).map(lead => (
+                <li key={lead.leadId}>
+                  <Link
+                    to={`/leads/${lead.leadId}`}
+                    className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-white/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm text-gray-800 truncate">{lead.customerName}</span>
+                      <StatusBadge status={lead.leadStatus} />
+                    </div>
+                    <span className="text-sm font-semibold text-red-700 shrink-0">{formatBudget(lead.budget)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
 
       {/* ── Recently Lost ── */}
-      <InsightSection
-        icon={TrendingDown}
-        title="Recently Lost"
-        count={recentlyLost.length}
-        color="slate"
-      >
-        {recentlyLost.length === 0 ? (
-          <p className="text-sm text-gray-400">No leads lost in the last 30 days.</p>
-        ) : (
-          <>
-            <p className="text-xs text-gray-500 mb-3">Leads marked Lost in the last 30 days. Look for patterns by source or budget.</p>
-            <div className="space-y-2">
-              {recentlyLost.map(lead => (
-                <Link
-                  key={lead.leadId}
-                  to={`/leads/${lead.leadId}`}
-                  className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm font-medium text-gray-700 truncate">{lead.customerName}</span>
-                    {lead.leadSource && (
-                      <span className="text-xs bg-white border border-gray-200 text-gray-600 px-1.5 py-0.5 rounded">{lead.leadSource}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 text-xs">
-                    {lead.budget > 0 && (
-                      <span className="text-gray-600">{formatBudget(lead.budget)}</span>
-                    )}
-                    <span className="text-gray-400">{lead.leadDate}</span>
-                  </div>
-                </Link>
-              ))}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl flex flex-col">
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-slate-100 rounded-lg">
+              <TrendingDown size={16} className="text-slate-400" />
             </div>
-          </>
-        )}
-      </InsightSection>
+            <span className="text-sm font-semibold text-gray-900">Recently Lost</span>
+          </div>
+          <span className="text-sm font-bold text-slate-500 bg-slate-100 rounded-lg px-2.5 py-1">
+            {recentlyLost.length}
+          </span>
+        </div>
+        <p className="text-xs text-slate-500 px-4 pb-3">Lost in the last 30 days — look for patterns by source or budget</p>
+        <div className="border-t border-black/5 flex-1">
+          {recentlyLost.length === 0 ? (
+            <p className="text-sm text-gray-400 px-4 py-6 text-center">No leads lost in the last 30 days.</p>
+          ) : (
+            <ul className="max-h-80 overflow-y-auto py-1">
+              {recentlyLost.map(lead => (
+                <li key={lead.leadId}>
+                  <Link
+                    to={`/leads/${lead.leadId}`}
+                    className="flex items-center justify-between gap-2 px-4 py-2 hover:bg-white/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm text-gray-700 truncate">{lead.customerName}</span>
+                      {lead.leadSource && (
+                        <span className="text-xs bg-white border border-gray-200 text-gray-600 px-1.5 py-0.5 rounded">{lead.leadSource}</span>
+                      )}
+                    </div>
+                    <span className="text-sm text-gray-600 shrink-0">
+                      {lead.budget > 0 ? formatBudget(lead.budget) : lead.leadDate}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-// Hot/Warm/Cold card showing first 10 leads with View All
 function ClassificationCard({ title, icon: Icon, accent, tagline, leads, onViewAll }) {
   const accentMap = {
-    red:    { bg: 'bg-red-50',    border: 'border-red-200',    iconBg: 'bg-red-100',    iconClr: 'text-red-500',   titleClr: 'text-red-800',   countClr: 'text-red-600',   tagClr: 'text-red-500',   linkClr: 'text-red-600 hover:text-red-700' },
-    amber:  { bg: 'bg-amber-50',  border: 'border-amber-200',  iconBg: 'bg-amber-100',  iconClr: 'text-amber-500', titleClr: 'text-amber-800', countClr: 'text-amber-600', tagClr: 'text-amber-600', linkClr: 'text-amber-700 hover:text-amber-800' },
-    slate:  { bg: 'bg-slate-50',  border: 'border-slate-200',  iconBg: 'bg-slate-100',  iconClr: 'text-slate-400', titleClr: 'text-slate-700', countClr: 'text-slate-500', tagClr: 'text-slate-500', linkClr: 'text-slate-600 hover:text-slate-700' },
+    red:    { bg: 'bg-red-50',   border: 'border-red-200',   iconBg: 'bg-red-100',   iconClr: 'text-red-500',   countBg: 'bg-red-100',   countClr: 'text-red-600',   tagClr: 'text-red-500',   linkClr: 'text-red-600 hover:text-red-700',  rowHover: 'hover:bg-white/60' },
+    amber:  { bg: 'bg-amber-50', border: 'border-amber-200', iconBg: 'bg-amber-100', iconClr: 'text-amber-500', countBg: 'bg-amber-100', countClr: 'text-amber-600', tagClr: 'text-amber-600', linkClr: 'text-amber-700 hover:text-amber-800', rowHover: 'hover:bg-white/60' },
+    slate:  { bg: 'bg-slate-50', border: 'border-slate-200', iconBg: 'bg-slate-100', iconClr: 'text-slate-400', countBg: 'bg-slate-100', countClr: 'text-slate-500', tagClr: 'text-slate-500', linkClr: 'text-slate-600 hover:text-slate-700', rowHover: 'hover:bg-white/60' },
   };
   const c = accentMap[accent] || accentMap.amber;
-  const totalBudget = leads.reduce((s, l) => s + (l.budget || 0), 0);
   const previewLeads = leads.slice(0, 10);
   const hidden = leads.length - previewLeads.length;
 
   return (
-    <div className={`${c.bg} border ${c.border} rounded-xl p-4 flex flex-col`}>
-      <div className="flex items-center gap-2 mb-2">
-        <div className={`p-1.5 ${c.iconBg} rounded-lg`}>
-          <Icon size={16} className={c.iconClr} />
+    <div className={`${c.bg} border ${c.border} rounded-xl flex flex-col`}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <div className="flex items-center gap-2">
+          <div className={`p-1.5 ${c.iconBg} rounded-lg`}>
+            <Icon size={16} className={c.iconClr} />
+          </div>
+          <span className="text-sm font-semibold text-gray-900">{title}</span>
         </div>
-        <span className={`text-sm font-semibold ${c.titleClr}`}>{title}</span>
+        <span className={`text-sm font-bold ${c.countClr} ${c.countBg} rounded-lg px-2.5 py-1`}>
+          {leads.length}
+        </span>
       </div>
-      <p className={`text-3xl font-bold ${c.countClr} mb-0.5`}>{leads.length}</p>
-      <p className={`text-xs ${c.tagClr} mb-2`}>{tagline}</p>
-      {totalBudget > 0 && (
-        <p className={`text-xs font-semibold ${c.titleClr} mb-3`}>
-          {formatBudget(totalBudget)} potential
-        </p>
-      )}
-      {previewLeads.length > 0 && (
-        <ul className="space-y-1 mb-3 max-h-72 overflow-y-auto">
-          {previewLeads.map(lead => (
-            <li key={lead.leadId}>
-              <Link
-                to={`/leads/${lead.leadId}`}
-                className="flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-white/60 transition-colors"
-              >
-                <span className="text-xs text-gray-800 truncate flex-1">{lead.customerName}</span>
-                {lead.budget > 0 && (
-                  <span className="text-[11px] text-gray-600 shrink-0">{formatBudget(lead.budget)}</span>
-                )}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-      {leads.length > 0 && (
-        <button
-          onClick={onViewAll}
-          className={`mt-auto flex items-center gap-1 text-xs font-semibold ${c.linkClr} self-start`}
-        >
-          {hidden > 0 ? `View all ${leads.length}` : 'View in list'} <ArrowRight size={12} />
-        </button>
-      )}
+      <p className={`text-xs ${c.tagClr} px-4 pb-3`}>{tagline}</p>
+
+      {/* Divider + lead list */}
+      <div className="border-t border-black/5 flex-1 flex flex-col">
+        {previewLeads.length > 0 ? (
+          <ul className="flex-1 max-h-80 overflow-y-auto py-1">
+            {previewLeads.map(lead => (
+              <li key={lead.leadId}>
+                <Link
+                  to={`/leads/${lead.leadId}`}
+                  className={`flex items-center justify-between gap-2 px-4 py-2 ${c.rowHover} transition-colors`}
+                >
+                  <span className="text-sm text-gray-800 truncate flex-1">{lead.customerName}</span>
+                  {lead.budget > 0 && (
+                    <span className="text-sm font-medium text-gray-600 shrink-0">{formatBudget(lead.budget)}</span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-gray-400 px-4 py-6 text-center">No leads</p>
+        )}
+        {leads.length > 0 && (
+          <div className="px-4 pb-3 pt-1">
+            <button
+              onClick={onViewAll}
+              className={`flex items-center gap-1 text-xs font-semibold ${c.linkClr}`}
+            >
+              {hidden > 0 ? `View all ${leads.length}` : 'View in list'} <ArrowRight size={12} />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
